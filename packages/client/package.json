@@ -1,0 +1,46 @@
+{
+  "name": "@ravex/client",
+  "version": "0.1.0",
+  "description": "connect to ravex from the frontend",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "author": "gs-rumana",
+  "license": "MIT",
+  "homepage": "https://github.com/ravex-io/ravex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ravex-io/ravex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ravex-io/ravex/issues"
+  },
+  "keywords": [
+    "chat",
+    "realtime",
+    "websocket",
+    "socket.io",
+    "client",
+    "ravex"
+  ],
+  "dependencies": {
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@ravex/types": "workspace:*",
+    "@types/node": "^25.9.1"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@ravex/tests",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@ravex/client": "workspace:*",
+    "@ravex/server": "workspace:*",
+    "@ravex/types": "workspace:*",
+    "@vitest/coverage-v8": "^3.0.7",
+    "vitest": "^3.0.7"
+  }
+}

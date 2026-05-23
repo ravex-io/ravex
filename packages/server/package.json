@@ -1,0 +1,47 @@
+{
+  "name": "@ravex/server",
+  "version": "0.1.0",
+  "description": "chat engine for any node.js server",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "author": "gs-rumana",
+  "license": "MIT",
+  "homepage": "https://github.com/ravex-io/ravex#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ravex-io/ravex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ravex-io/ravex/issues"
+  },
+  "keywords": [
+    "chat",
+    "realtime",
+    "websocket",
+    "socket.io",
+    "server",
+    "engine",
+    "ravex"
+  ],
+  "dependencies": {
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@ravex/types": "workspace:*",
+    "@types/node": "^25.9.1"
+  }
+}

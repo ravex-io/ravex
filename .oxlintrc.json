@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "warn",
+    "perf": "warn",
+    "style": "warn"
+  },
+  "plugins": ["typescript"],
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    "no-debugger": "error",
+    "eqeqeq": ["error", "always"],
+    "no-var": "error",
+    "prefer-const": "error",
+
+    "no-unused-vars": "off",
+    "typescript/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "warn",
+    "typescript/consistent-type-imports": ["error", { "prefer": "type-imports" }],
+    "typescript/ban-types": "error",
+
+    "sort-keys": "off",
+    "sort-imports": "off",
+    "capitalized-comments": "off",
+    "curly": "off",
+    "no-console": "off",
+    "no-magic-numbers": ["warn", { "ignore": [-1, 0, 1] }],
+    "no-ternary": "off",
+    "id-length": "off",
+    "max-lines": "off",
+    "max-statements": "off",
+    "prefer-destructuring": "off",
+    "typescript/parameter-properties": "off"
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "*.config.*", "*.d.ts"]
+}

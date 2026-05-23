@@ -1,0 +1,38 @@
+{
+  "name": "ravex",
+  "version": "0.1.0",
+  "description": "plug n play chat system",
+  "devDependencies": {
+    "oxfmt": "^0.51.0",
+    "oxlint": "^1.66.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "build": "pnpm --filter @ravex/types build && pnpm --filter @ravex/server build && pnpm --filter @ravex/client build",
+    "lint": "oxlint packages/*/src",
+    "lint:fix": "oxlint --fix packages/*/src",
+    "format": "oxfmt packages/*/src --write",
+    "format:check": "oxfmt packages/*/src --check",
+    "test": "pnpm --filter @ravex/tests test",
+    "test:coverage": "pnpm --filter @ravex/tests test:coverage"
+  },
+  "author": "gs-rumana <gursahb7@gmail.com> (https://gs-rumana.com)",
+  "homepage": "https://github.com/ravex-io/ravex#readme",
+  "bugs": {
+    "url": "https://github.com/ravex-io/ravex/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ravex-io/ravex.git"
+  },
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.2.2",
+      "onFail": "download"
+    }
+  },
+  "private": true
+}
