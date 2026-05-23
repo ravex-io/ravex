@@ -1,6 +1,6 @@
 # @ravex/client
 
-![Ravex Client](../../assets/ravex-client.webp)
+![Ravex Client](https://github.com/ravex-io/ravex/raw/main/assets/ravex-client.webp)
 
 A robust, fully-typed WebSocket client for the Ravex real-time chat system. Built on top of `socket.io-client`, it provides a clean, promise-based API with comprehensive TypeScript support for all chat operations.
 

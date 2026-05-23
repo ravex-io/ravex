@@ -1,6 +1,6 @@
 # @ravex/server
 
-![Ravex Server](../../assets/ravex-server.webp)
+![Ravex Server](https://github.com/ravex-io/ravex/raw/main/assets/ravex-server.webp)
 
 The core engine for the Ravex real-time chat system. Built on `socket.io`, it handles bidirectional messaging, presence tracking, typing indicators, room management, and robust rate limiting.
 
