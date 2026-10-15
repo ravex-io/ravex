@@ -18,6 +18,7 @@ import type {
 import { RoomManager, type CreateRoomOptions } from './core/RoomManager.js'
 import { UserManager } from './core/UserManager.js'
 import { RateLimiter, type RateLimitConfig } from './middleware/RateLimiter.js'
+import { validateEvents, safeListener, guardCallbacks } from './middleware/EventGuard.js'
 import { MessageHandler, type MessageHandlerConfig } from './handlers/MessageHandler.js'
 import { TypingHandler, userRoom, type TypingConfig } from './handlers/TypingHandler.js'
 import { PresenceHandler, type PresenceConfig } from './handlers/PresenceHandler.js'
@@ -63,12 +64,13 @@ export interface ChatEngineOptions {
   typing?: TypingConfig
   presence?: PresenceConfig
   rateLimit?: RateLimitConfig
-  onMessage?: (message: Message) => void
-  onEdit?: (message: Message, previousContent: string) => void
-  onDelete?: (message: Message) => void
-  onRead?: (userId: string, messageId: string, roomId: string) => void
-  onReaction?: (reaction: ReactPayload, message: Message) => void
-  onStatusChange?: (userId: string, previousStatus: UserStatus) => void
+  // Application callbacks may be sync or async. Errors they throw or reject with are logged and never crash the server.
+  onMessage?: (message: Message) => void | Promise<void>
+  onEdit?: (message: Message, previousContent: string) => void | Promise<void>
+  onDelete?: (message: Message) => void | Promise<void>
+  onRead?: (userId: string, messageId: string, roomId: string) => void | Promise<void>
+  onReaction?: (reaction: ReactPayload, message: Message) => void | Promise<void>
+  onStatusChange?: (userId: string, previousStatus: UserStatus) => void | Promise<void>
 }
 
 export class ChatEngine {
@@ -90,6 +92,7 @@ export class ChatEngine {
    *                  socket.io ServerOptions (CORS, transports, etc.).
    */
   constructor(srv: HttpServerInstance | number | Server, options: ChatEngineOptions = {}) {
+    options = guardCallbacks(options)
     this.server = srv instanceof Server ? srv : new Server(srv as HttpServerInstance, options.socket)
     const nsPath = options.namespace ?? '/'
     this.ns = this.server.of(nsPath) as TypedNamespace
@@ -146,22 +149,31 @@ export class ChatEngine {
       socket.join(userRoom(user.id))
       const rooms = this.roomManager.getRoomsForUser(user.id)
       rooms.forEach((r) => socket.join(r.id))
-      socket.on('message:send', (p, a) => this.messageHandler.onSend(socket, p, a))
-      socket.on('message:edit', (p, a) => this.messageHandler.onEdit(socket, p, a))
-      socket.on('message:delete', (p, a) => this.messageHandler.onDelete(socket, p, a))
-      socket.on('message:read', (p) => this.messageHandler.onRead(socket, p))
-      socket.on('message:react', (p, a) => this.messageHandler.onReact(socket, p, a))
-      socket.on('message:history', (p, a) => this.messageHandler.onHistory(socket, p, a))
-      socket.on('typing:start', (p) => this.typingHandler.onStart(socket, p))
-      socket.on('typing:stop', (p) => this.typingHandler.onStop(socket, p))
-      socket.on('room:join', (p, a) => this.handleRoomJoin(socket, p, a))
-      socket.on('room:leave', (p, a) => this.handleRoomLeave(socket, p, a))
-      socket.on('room:create', (p, a) => this.handleRoomCreate(socket, p, a))
-      socket.on('room:delete', (p, a) => this.handleRoomDelete(socket, p, a))
-      socket.on('room:members', (p, a) => this.handleRoomMembers(socket, p, a))
-      socket.on('room:list', (a) => this.handleRoomList(socket, a))
-      socket.on('presence:ping', () => this.presenceHandler.onPing(socket))
-      socket.on('presence:status', (p) => this.presenceHandler.onStatusChange(socket, p))
+
+      // Malformed events from a client must never take the server down.
+      validateEvents(socket)
+      const on = <E extends keyof ClientToServerEvents>(event: E, listener: ClientToServerEvents[E]): void => {
+        ;(socket as { on(e: string, l: (...args: unknown[]) => void): void }).on(
+          event,
+          safeListener(event, listener as (...args: unknown[]) => unknown),
+        )
+      }
+      on('message:send', (p, a) => this.messageHandler.onSend(socket, p, a))
+      on('message:edit', (p, a) => this.messageHandler.onEdit(socket, p, a))
+      on('message:delete', (p, a) => this.messageHandler.onDelete(socket, p, a))
+      on('message:read', (p) => this.messageHandler.onRead(socket, p))
+      on('message:react', (p, a) => this.messageHandler.onReact(socket, p, a))
+      on('message:history', (p, a) => this.messageHandler.onHistory(socket, p, a))
+      on('typing:start', (p) => this.typingHandler.onStart(socket, p))
+      on('typing:stop', (p) => this.typingHandler.onStop(socket, p))
+      on('room:join', (p, a) => this.handleRoomJoin(socket, p, a))
+      on('room:leave', (p, a) => this.handleRoomLeave(socket, p, a))
+      on('room:create', (p, a) => this.handleRoomCreate(socket, p, a))
+      on('room:delete', (p, a) => this.handleRoomDelete(socket, p, a))
+      on('room:members', (p, a) => this.handleRoomMembers(socket, p, a))
+      on('room:list', (a) => this.handleRoomList(socket, a))
+      on('presence:ping', () => this.presenceHandler.onPing(socket))
+      on('presence:status', (p) => this.presenceHandler.onStatusChange(socket, p))
       socket.on('disconnect', () => this.handleDisconnect(user.id, user.username, socket.id))
     })
   }
