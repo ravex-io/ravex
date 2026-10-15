@@ -13,7 +13,8 @@ export interface TestServer {
 
 export async function createServer(options?: ChatEngineOptions): Promise<TestServer> {
   const httpServer = createHttpServer()
-  const engine = new ChatEngine(httpServer, options)
+  // Tests connect with a plain auth.user; tests of real authentication pass their own `authenticate`.
+  const engine = new ChatEngine(httpServer, { insecureTrustClientUser: true, ...options })
 
   await new Promise<void>((resolve) => {
     httpServer.listen(0, () => resolve())

@@ -27,6 +27,8 @@ const httpServer = createServer()
 
 // 2. Initialize the ChatEngine
 const engine = new ChatEngine(httpServer, {
+  // Verify who is connecting (required, see "Authentication" below)
+  authenticate: async (handshake) => verifySession(handshake.auth.token),
   // CORS configuration for Socket.IO
   socket: {
     cors: { origin: '*' }
@@ -52,6 +54,8 @@ httpServer.listen(3000, () => {
 ## Framework Integrations
 
 `ChatEngine` can be seamlessly attached to the underlying HTTP server of any popular Node.js framework.
+
+> The examples below omit options for brevity. A real server must also pass `authenticate` (see [Authentication](#authentication)), otherwise every connection is rejected.
 
 ### Express
 ```typescript
@@ -156,6 +160,8 @@ All properties are optional.
 
 - **`namespace`**: The Socket.IO namespace to bind to (default: `'/'`).
 - **`socket`**: Socket.IO server options (e.g., `cors`, `transports`).
+- **`authenticate`**: `(handshake) => user | null | Promise<user | null>`. Verifies who is connecting and returns their user (`{ id, username?, displayName?, avatar?, status?, metadata? }`). Return `null`/`undefined` or throw to reject the connection. See [Authentication](#authentication).
+- **`insecureTrustClientUser`**: Development only. Trusts the `auth.user` object sent by the client, so anyone can connect as any user. Ignored when `authenticate` is set. Default: `false`.
 - **`persistence`**: A custom adapter implementing `PersistenceAdapter` to save/load messages from a database.
   - Implement the optional `getMessage(messageId)` method so ownership checks on edit, delete and react can find any message, not only the ones returned by `getMessages(roomId)`. Without a persistence adapter, the engine remembers the sender of the last 10,000 messages in memory for these checks.
 - **`messageMiddleware`**: Array of middleware functions to run before sending a message.
@@ -215,11 +221,34 @@ const engine = new ChatEngine(httpServer, { persistence: myDbAdapter })
 
 ## Authentication
 
-Authentication is handled natively by the engine via handshake. Clients must pass their `User` object during connection:
+The server decides who a connecting user is. Pass an `authenticate` function that checks a credential from the handshake (a token in `handshake.auth`, a cookie in `handshake.headers`, …) and returns the user:
 
 ```typescript
+// On the server
+const engine = new ChatEngine(httpServer, {
+  authenticate: async (handshake) => {
+    const session = await sessions.findByToken(handshake.auth.token) // your own lookup / JWT verify
+    if (!session) return null                                       // rejects the connection
+    return { id: session.userId, username: session.username }
+  },
+})
+
 // On the client
+const client = new ChatClient({ url: 'https://chat.example.com', auth: { token: sessionToken } })
+```
+
+- Returning `null`/`undefined`, returning a user without a non-empty string `id`, or throwing rejects the connection. The client gets a generic `connect_error` with the message `"Authentication failed"`; the real error is only logged on the server.
+- When `authenticate` is set, any `auth.user` object sent by the client is ignored.
+- **Without `authenticate`, every connection is rejected.**
+- Connections restored by Socket.IO [connection state recovery](https://socket.io/docs/v4/connection-state-recovery) are authenticated again too: the engine sets `connectionStateRecovery.skipMiddlewares` to `false` (also on a Socket.IO server you pass in), holds missed messages back until `authenticate` succeeds, and only replays them for rooms the user is still a member of. If the token now resolves to a different user, the old session's rooms and messages are dropped.
+
+### Local development
+
+For quick prototypes you can let clients say who they are:
+
+```typescript
+const engine = new ChatEngine(httpServer, { insecureTrustClientUser: true })
 const client = new ChatClient({ auth: { user: { id: '1', username: 'john' } } })
 ```
 
-If the `auth.user` payload is missing or invalid, the server will immediately reject the socket connection.
+This lets anyone connect as any user, so never enable it in production. The server logs a warning at startup when it is on.

@@ -18,19 +18,14 @@ yarn add @ravex/client
 
 ```typescript
 import { ChatClient } from '@ravex/client'
-import type { User } from '@ravex/types'
 
-const currentUser: User = {
-  id: 'user-123',
-  username: 'johndoe',
-  status: 'online',
-  socketIds: []
-}
+// The token from your app's login flow; the server verifies it in its `authenticate` option
+const sessionToken = await getSessionToken()
 
 // 1. Initialize the client
 const client = new ChatClient({
   url: 'http://localhost:3000',
-  auth: { user: currentUser }
+  auth: { token: sessionToken } // verified by the server's `authenticate` option
 })
 
 // 2. Setup event listeners
@@ -55,7 +50,7 @@ Creates a new chat client instance. Automatically connects on instantiation. Cal
 **`ChatClientOptions` properties:**
 - `url` (string): The base URL of the socket.io server. Defaults to `''`.
 - `namespace` (string): The namespace to connect to. Defaults to `'/'`.
-- `auth` (Object | Function): Authentication payload sent during connection handshake. Usually contains the `{ user: User }` object.
+- `auth` (Object | Function): Authentication payload sent during connection handshake, read by the server's `authenticate` option (usually `{ token }`). Only servers running with `insecureTrustClientUser: true` read a `{ user: User }` object from it.
 - `transports` (string[]): Socket.io transports. Defaults to `['websocket', 'polling']`.
 - `withCredentials` (boolean): Whether to send cross-origin credentials. Defaults to `true`.
 - `autoConnect` (boolean): Whether to auto connect on startup. Defaults to `true`.

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `authenticate` option on `ChatEngine` to verify who is connecting (e.g. from a token or cookie in the handshake).
+- `insecureTrustClientUser` option to trust the client-provided `auth.user` during local development.
+
+### Security
+- **Breaking:** the server no longer trusts the `auth.user` object sent by the client by default, which let anyone connect as any user. Without `authenticate` every connection is rejected; set `authenticate`, or `insecureTrustClientUser: true` for development only.
+- Client-provided user objects are reduced to known fields (`id`, `username`, `displayName`, `avatar`, `status`, `metadata`), and `id` must be a non-empty string.
+
 ## [0.1.1] - 2026-05-24
 ### Added
 - Support for Common JS imports

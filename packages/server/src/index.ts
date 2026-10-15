@@ -9,5 +9,6 @@ export {
 } from './ChatEngine.js'
 
 export { ChatError, ErrorCodes } from './utils/errors.js'
+export type { Authenticate, AuthenticatedUser, Handshake } from './middleware/Auth.js'
 
 export type { ServerOptions } from 'socket.io'
