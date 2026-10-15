@@ -45,8 +45,14 @@ describe('Typing Indicators', () => {
       clientB.onTypingStop((data) => resolve(data))
     })
 
+    // typing:stop is only broadcast for a user who is actually typing
+    const started = new Promise<void>((resolve) => {
+      clientB.onTypingStart(() => resolve())
+    })
+    clientA.startTyping(roomId)
+    await started
     clientA.stopTyping(roomId)
-    
+
     const typingData = await typingPromise
     expect(typingData.roomId).toBe(roomId)
     expect(typingData.userId).toBe(userA.id)

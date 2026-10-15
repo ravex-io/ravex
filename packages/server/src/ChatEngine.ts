@@ -19,7 +19,7 @@ import { RoomManager, type CreateRoomOptions } from './core/RoomManager.js'
 import { UserManager } from './core/UserManager.js'
 import { RateLimiter, type RateLimitConfig } from './middleware/RateLimiter.js'
 import { MessageHandler, type MessageHandlerConfig } from './handlers/MessageHandler.js'
-import { TypingHandler, type TypingConfig } from './handlers/TypingHandler.js'
+import { TypingHandler, userRoom, type TypingConfig } from './handlers/TypingHandler.js'
 import { PresenceHandler, type PresenceConfig } from './handlers/PresenceHandler.js'
 import { ChatError, ErrorCodes } from './utils/errors.js'
 
@@ -103,13 +103,18 @@ export class ChatEngine {
       config: options.message ?? {},
       persistence: this.persistence,
       middleware: this.middleware,
+      clearTyping: (socketId, userId, roomId) => this.typingHandler.clearForSocketInRoom(socketId, userId, roomId),
       onMessage: options.onMessage ?? (() => {}),
       onEdit: options.onEdit ?? (() => {}),
       onDelete: options.onDelete ?? (() => {}),
       onRead: options.onRead ?? (() => {}),
       onReaction: options.onReaction ?? (() => {}),
     })
-    this.typingHandler = new TypingHandler(this.ns, this.roomManager, options.typing ?? {})
+    this.typingHandler = new TypingHandler(this.ns, this.roomManager, {
+      ...options.typing,
+      // rateLimit.typingThrottle is documented in RateLimitConfig; typing.typingThrottle wins if both are set.
+      typingThrottle: options.typing?.typingThrottle ?? options.rateLimit?.typingThrottle,
+    })
     this.presenceHandler = new PresenceHandler({
       ns: this.ns,
       userManager: this.userManager,
@@ -138,6 +143,7 @@ export class ChatEngine {
         return
       }
       this.registerUser(user, socket.id)
+      socket.join(userRoom(user.id))
       const rooms = this.roomManager.getRoomsForUser(user.id)
       rooms.forEach((r) => socket.join(r.id))
       socket.on('message:send', (p, a) => this.messageHandler.onSend(socket, p, a))
@@ -179,6 +185,7 @@ export class ChatEngine {
 
   private handleDisconnect(userId: string, username: string, socketId: string): void {
     this.userManager.removeSocketId(userId, socketId)
+    this.typingHandler.clearForSocket(socketId)
     if (!this.userManager.isConnected(userId)) {
       const user = this.userManager.get(userId)
       const lastSeen = new Date()
@@ -187,7 +194,7 @@ export class ChatEngine {
         this.userManager.set(userId, user)
       }
       this.ns.emit('user:offline', { id: userId, username, lastSeen })
-      this.typingHandler.clearAll(userId, username)
+      this.typingHandler.clearAll(userId)
       this.presenceHandler.clearAll(userId)
     }
   }
@@ -228,7 +235,7 @@ export class ChatEngine {
           roomId,
           user: { id: user.id, username: user.username },
         })
-        this.typingHandler.clearForRoom(user.id, user.username, roomId)
+        this.typingHandler.clearForRoom(user.id, roomId)
       }
       ack({ ok: true, data: undefined })
     } catch (err) {
@@ -263,6 +270,7 @@ export class ChatEngine {
         throw new ChatError('Room not found', ErrorCodes.ROOM_NOT_FOUND)
       }
       this.roomManager.delete(roomId)
+      this.typingHandler.clearRoomSilently(roomId)
       this.ns.to(roomId).emit('room:deleted', { roomId })
       ack({ ok: true, data: undefined })
     } catch (err) {
@@ -329,6 +337,7 @@ export class ChatEngine {
   public kickUser(roomId: string, userId: string, reason = 'Removed from room'): void {
     const room = this.roomManager.get(roomId)
     if (!room) return
+    this.typingHandler.clearForRoom(userId, roomId)
     this.roomManager.removeMember(roomId, userId)
     const user = this.userManager.get(userId)
     if (user) {
@@ -346,5 +355,6 @@ export class ChatEngine {
   public destroy(): void {
     this.rateLimiter.destroy()
     this.presenceHandler.destroy()
+    this.typingHandler.destroy()
   }
 }
