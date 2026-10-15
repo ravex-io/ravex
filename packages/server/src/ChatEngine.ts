@@ -36,6 +36,11 @@ type ErrorAck = (response: { ok: false; error: { code: string; message: string }
 
 export interface PersistenceAdapter {
   saveMessage(message: Message): Promise<void>
+  /**
+   * Optional: look up a single message by id. Used to check ownership on edit/delete/react.
+   * When omitted, the engine scans `getMessages(roomId)`, which only sees the messages that call returns.
+   */
+  getMessage?(messageId: string): Promise<Message | null | undefined>
   getMessages(roomId: string, limit?: number, before?: Date): Promise<Message[]>
   updateMessage(messageId: string, updates: Partial<Message>): Promise<void>
   deleteMessage(messageId: string): Promise<void>
@@ -220,6 +225,10 @@ export class ChatEngine {
       if (!room) throw new ChatError('Room not found', ErrorCodes.ROOM_NOT_FOUND)
       const wasMember = this.roomManager.isMember(roomId, user.id)
       if (!wasMember) {
+        if (room.isPrivate) throw new ChatError('This room is private', ErrorCodes.UNAUTHORIZED)
+        if (room.maxMembers !== undefined && room.members.length >= room.maxMembers) {
+          throw new ChatError('Room is full', ErrorCodes.ROOM_FULL)
+        }
         this.roomManager.addMember(roomId, user.id)
       }
       socket.join(roomId)
@@ -275,11 +284,11 @@ export class ChatEngine {
       const user = socket.data.user
       const { roomId } = data
       if (!roomId) throw new ChatError('roomId required', ErrorCodes.VALIDATION)
-      if (!this.roomManager.isAdmin(roomId, user.id)) {
-        throw new ChatError('Admin only', ErrorCodes.UNAUTHORIZED)
-      }
       if (!this.roomManager.get(roomId)) {
         throw new ChatError('Room not found', ErrorCodes.ROOM_NOT_FOUND)
+      }
+      if (!this.roomManager.isAdmin(roomId, user.id)) {
+        throw new ChatError('Admin only', ErrorCodes.UNAUTHORIZED)
       }
       this.roomManager.delete(roomId)
       this.typingHandler.clearRoomSilently(roomId)

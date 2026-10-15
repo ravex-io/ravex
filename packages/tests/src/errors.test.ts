@@ -11,7 +11,7 @@ describe('Errors & Edge Cases', () => {
 
   beforeEach(async () => {
     // Configure server with max message length of 10 for testing
-    server = await createServer({ message: { maxMessageLength: 10 } })
+    server = await createServer({ message: { maxMessageLength: 10, allowEdits: true } })
     clientA = await createConnectedClient(server.port, userA)
   })
 
@@ -50,12 +50,10 @@ describe('Errors & Edge Cases', () => {
     // B sends message
     const msg = await clientB.sendMessage({ roomId: room.id, content: 'B message' })
 
-    // A tries to edit B's message
-    // Note: since we don't have persistence set up by default in the engine tests, 
-    // editing another user's message might actually fail differently or succeed if there's no persistence check.
-    // Wait, the engine only checks persistence. Let's see if editing requires persistence to fail.
-    // It does. So let's test deleting a non-existent room instead.
-    
+    // A tries to edit B's message (ownership is checked even without a persistence adapter)
+    await expect(clientA.editMessage({ messageId: msg.id, roomId: room.id, content: 'forged' }))
+      .rejects.toThrow("Cannot edit another user's message")
+
     clientB.disconnect()
   })
 

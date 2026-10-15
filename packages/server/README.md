@@ -157,6 +157,7 @@ All properties are optional.
 - **`namespace`**: The Socket.IO namespace to bind to (default: `'/'`).
 - **`socket`**: Socket.IO server options (e.g., `cors`, `transports`).
 - **`persistence`**: A custom adapter implementing `PersistenceAdapter` to save/load messages from a database.
+  - Implement the optional `getMessage(messageId)` method so ownership checks on edit, delete and react can find any message, not only the ones returned by `getMessages(roomId)`. Without a persistence adapter, the engine remembers the sender of the last 10,000 messages in memory for these checks.
 - **`messageMiddleware`**: Array of middleware functions to run before sending a message.
 - **`message`**: Configuration for messaging behavior:
   - `allowEdits` (boolean)

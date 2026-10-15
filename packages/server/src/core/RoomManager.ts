@@ -50,8 +50,15 @@ export class RoomManager {
       throw new ChatError('createdBy is required', ErrorCodes.VALIDATION)
     }
 
+    if (maxMembers !== undefined && (!Number.isInteger(maxMembers) || maxMembers < 1)) {
+      throw new ChatError('maxMembers must be a positive integer', ErrorCodes.VALIDATION)
+    }
+
     const id = randomUUID()
     const memberList = [...new Set([createdBy, ...members])]
+    if (maxMembers !== undefined && memberList.length > maxMembers) {
+      throw new ChatError(`Too many members (max ${maxMembers})`, ErrorCodes.ROOM_FULL)
+    }
     const adminList = [...new Set([createdBy, ...admins])]
 
     const room: Room = {
