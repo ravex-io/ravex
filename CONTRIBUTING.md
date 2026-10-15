@@ -97,4 +97,31 @@ pnpm format
 - If altering public APIs, update the respective `README.md` files.
 - Document any breaking changes in the PR description.
 
+---
+
+## Releasing
+
+Releases are cut from `main` by pushing a version tag. The [Release workflow](.github/workflows/release.yml) builds and tests the repo, publishes `@ravex/server` and `@ravex/client` to npm with provenance, and creates a GitHub Release from the matching `CHANGELOG.md` section.
+
+1. Set the same `version` in `packages/server/package.json` and `packages/client/package.json`.
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` and add a fresh `## [Unreleased]` above it.
+3. Commit to `main`, then tag and push:
+   ```bash
+   git tag vX.Y.Z
+   git push origin main vX.Y.Z
+   ```
+
+The workflow stops before publishing if the tag doesn't match both package versions, or if `CHANGELOG.md` has no section for that version. A pre-release version such as `v0.3.0-beta.1` is published under the `next` npm tag and marked as a pre-release on GitHub. If a run fails partway, re-run it: packages already on npm are skipped.
+
+### One-time setup: npm trusted publishing
+
+The workflow signs in to npm with OIDC instead of a stored token, so each package must trust it once. This needs npm 11.15 or newer and 2FA on your npm account. Run these from outside the repo, because `devEngines` makes npm refuse to run inside it:
+
+```bash
+npm trust github @ravex/server --repo ravex-io/ravex --file release.yml --allow-publish
+npm trust github @ravex/client --repo ravex-io/ravex --file release.yml --allow-publish
+```
+
+Alternatively, on npmjs.com open each package's **Settings → Trusted Publisher → GitHub Actions** and enter organization `ravex-io`, repository `ravex`, workflow `release.yml`.
+
 Thank you for contributing!

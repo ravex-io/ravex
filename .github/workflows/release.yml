@@ -1,0 +1,138 @@
+# Publishes @ravex/server and @ravex/client to npm and creates a GitHub Release
+# whenever a version tag is pushed:
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# npm authenticates this workflow through trusted publishing (OIDC), so there is
+# no npm token to store. See "Releasing" in CONTRIBUTING.md for the setup.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    outputs:
+      npm-tag: ${{ steps.version.outputs.npm-tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Match tag to package versions
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          status=0
+          for manifest in packages/*/package.json; do
+            IFS=$'\t' read -r name pkg_version private \
+              < <(jq -r '[.name, .version, (.private // false)] | @tsv' "$manifest")
+            [ "$private" = true ] && continue
+            if [ "$pkg_version" != "$version" ]; then
+              echo "::error file=$manifest::$name is at $pkg_version but the tag is $GITHUB_REF_NAME. Bump it and tag again."
+              status=1
+            fi
+          done
+          [ "$status" = 0 ] || exit 1
+
+          # Versions like 1.0.0-beta.1 go to the "next" dist-tag so they don't become the default install.
+          if [[ "$version" == *-* ]]; then
+            echo "npm-tag=next" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm-tag=latest" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read release notes from CHANGELOG.md
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Everything under "## [<version>]" up to the next version heading or link reference.
+          notes=$(awk -v version="$version" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" version "]") == 1) { found = 1; next } }
+            /^\[[^]]+\]: / { if (found) exit }
+            found { print }
+          ' CHANGELOG.md)
+          if ! grep -q '[^[:space:]]' <<< "$notes"; then
+            echo "::error file=CHANGELOG.md::No '## [$version]' section found. Add one before tagging."
+            exit 1
+          fi
+          {
+            echo "notes<<RAVEX_RELEASE_NOTES_EOF"
+            echo "$notes"
+            echo "RAVEX_RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+
+  # Kept apart from `check` so the test suite never runs with permission to publish.
+  publish:
+    name: Publish ${{ github.ref_name }}
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      # No dependency cache here: a poisoned cache would flow straight into the published packages.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # Publishes every non-private workspace package whose version isn't on npm yet,
+      # so re-running a half-finished release is safe.
+      - name: Publish to npm
+        run: pnpm -r publish --access public --no-git-checks --tag "$NPM_TAG"
+        env:
+          NPM_TAG: ${{ needs.check.outputs.npm-tag }}
+
+      - name: Create GitHub Release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, leaving it as is."
+            exit 0
+          fi
+          printf '%s\n' "$NOTES" > "$RUNNER_TEMP/release-notes.md"
+          flags=()
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NOTES: ${{ needs.check.outputs.notes }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
