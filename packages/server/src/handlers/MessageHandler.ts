@@ -92,11 +92,12 @@ export class MessageHandler {
     if (!room) throw new ChatError('Room not found', ErrorCodes.ROOM_NOT_FOUND)
     if (!room.members.includes(user.id)) throw new ChatError('Not a member of this room', ErrorCodes.UNAUTHORIZED)
 
-    if (!this.rateLimiter.checkMessage(user.id)) {
-      throw new ChatError('Rate limit exceeded', ErrorCodes.RATE_LIMIT)
-    }
+    // Mute first, so messages from a muted user don't use up their rate-limit quota.
     if (this.rateLimiter.isMuted(user.id, roomId)) {
       throw new ChatError('You are muted in this room', ErrorCodes.MUTED)
+    }
+    if (!this.rateLimiter.checkMessage(user.id)) {
+      throw new ChatError('Rate limit exceeded', ErrorCodes.RATE_LIMIT)
     }
 
     return room

@@ -18,28 +18,76 @@ import type {
 } from '@ravex/types'
 
 const DEFAULT_HISTORY_LIMIT = 50
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
+
+type AuthPayload = Record<string, unknown>
+type AuthOption = AuthPayload | (() => AuthPayload | Promise<AuthPayload>)
 
 export interface ChatClientOptions {
   url?: string
   namespace?: string
-  auth?: Record<string, unknown> | (() => Record<string, unknown> | Promise<Record<string, unknown>>)
+  /** Handshake payload, or a function returning it (called again on every reconnect, e.g. to refresh a token). */
+  auth?: AuthOption
   transports?: string[]
   withCredentials?: boolean
   autoConnect?: boolean
+  /** How long (ms) request methods wait for the server before rejecting. Default: 10000. 0 disables the timeout. */
+  requestTimeout?: number
+}
+
+// Fields the server sends as Dates; JSON turns them into ISO strings on the wire.
+const DATE_FIELDS = new Set(['createdAt', 'editedAt', 'deletedAt', 'readAt', 'reactedAt', 'lastSeen', 'connectedAt'])
+
+/**
+ * Turns the ISO date strings of known date fields back into `Date` objects, in place, so the
+ * runtime values match the `Date` types in @ravex/types. `metadata` is left untouched.
+ */
+const reviveDates = (value: unknown): void => {
+  if (Array.isArray(value)) {
+    value.forEach(reviveDates)
+    return
+  }
+  if (typeof value !== 'object' || value === null || value instanceof Date) return
+  const record = value as Record<string, unknown>
+  for (const [key, field] of Object.entries(record)) {
+    if (DATE_FIELDS.has(key) && typeof field === 'string') {
+      const date = new Date(field)
+      if (!Number.isNaN(date.getTime())) record[key] = date
+    } else if (key !== 'metadata') {
+      reviveDates(field)
+    }
+  }
+}
+
+/**
+ * socket.io-client calls a function `auth` as `auth(cb)` and waits for `cb`; it ignores a returned
+ * value or Promise. Adapt `() => payload | Promise<payload>` to that callback style.
+ */
+const toSocketAuth = (auth: AuthOption | undefined): AuthPayload | ((cb: (data: object) => void) => void) | undefined => {
+  if (typeof auth !== 'function') return auth
+  return (cb) => {
+    Promise.resolve()
+      .then(() => auth())
+      // If the auth function fails, connect without credentials so the server rejects the handshake
+      // and the app gets a normal connect_error, instead of hanging forever.
+      .then((payload) => cb(payload ?? {}), () => cb({}))
+  }
 }
 
 export class ChatClient {
   private socket: Socket<ServerToClientEvents, ClientToServerEvents>
   private connected = false
+  private readonly requestTimeout: number
 
   constructor(options: ChatClientOptions = {}) {
     const ns = options.namespace ?? '/'
     const url = options.url ?? ''
+    this.requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT_MS
 
     this.socket = io(url + ns, {
       transports: options.transports ?? ['websocket', 'polling'],
       withCredentials: options.withCredentials ?? true,
-      auth: options.auth,
+      auth: toSocketAuth(options.auth),
       autoConnect: options.autoConnect ?? true,
     }) as Socket<ServerToClientEvents, ClientToServerEvents>
 
@@ -53,6 +101,8 @@ export class ChatClient {
     this.socket.on('disconnect', () => {
       this.connected = false
     })
+    // Registered first, so every event listener receives Date objects instead of ISO strings.
+    this.socket.onAny((_event: string, ...args: unknown[]) => args.forEach(reviveDates))
   }
 
   get isConnected(): boolean {
@@ -76,15 +126,20 @@ export class ChatClient {
     payload?: unknown,
   ): Promise<T> {
     return new Promise((resolve, reject) => {
-      const cb = (res: AckResponse<T>) => {
+      const cb = (err: Error | null, res?: AckResponse<T>) => {
+        if (err) return reject(new Error(`Request "${String(event)}" timed out after ${this.requestTimeout}ms`))
+        reviveDates(res)
         if (res?.ok) resolve(res.data)
         else reject(res?.error ? new Error(res.error.message) : new Error('Request failed'))
       }
-      if (payload === undefined) {
-        ;(this.socket as { emit(e: string, cb: Function): void }).emit(event as string, cb)
-      } else {
-        ;(this.socket as { emit(e: string, p: unknown, cb: Function): void }).emit(event as string, payload, cb)
-      }
+      // timeout() makes socket.io call the ack with an error first if the server doesn't answer in time.
+      const sender = (this.requestTimeout > 0 ? this.socket.timeout(this.requestTimeout) : null) as {
+        emit(e: string, ...args: unknown[]): void
+      } | null
+      const ack = sender ? cb : (res: AckResponse<T>) => cb(null, res)
+      const emitter = sender ?? (this.socket as { emit(e: string, ...args: unknown[]): void })
+      if (payload === undefined) emitter.emit(event as string, ack)
+      else emitter.emit(event as string, payload, ack)
     })
   }
 

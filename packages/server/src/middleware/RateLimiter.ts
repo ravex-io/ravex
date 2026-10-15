@@ -29,12 +29,13 @@ export class RateLimiter {
     const now = Date.now()
     const cutoff = now - this.window
 
-    let timestamps = this.windows.get(userId) ?? []
-    timestamps = timestamps.filter(t => t > cutoff)
-    timestamps.push(now)
+    const timestamps = (this.windows.get(userId) ?? []).filter(t => t > cutoff)
+    // Only accepted messages use up the quota, so retrying while limited doesn't extend the block.
+    const allowed = timestamps.length < this.max
+    if (allowed) timestamps.push(now)
     this.windows.set(userId, timestamps)
 
-    return timestamps.length <= this.max
+    return allowed
   }
 
   mute(userId: string, roomId: string, durationMs: number): void {

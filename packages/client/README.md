@@ -54,6 +54,7 @@ Creates a new chat client instance. Automatically connects on instantiation. Cal
 - `transports` (string[]): Socket.io transports. Defaults to `['websocket', 'polling']`.
 - `withCredentials` (boolean): Whether to send cross-origin credentials. Defaults to `true`.
 - `autoConnect` (boolean): Whether to auto connect on startup. Defaults to `true`.
+- `requestTimeout` (number): How long (ms) request methods such as `sendMessage` or `joinRoom` wait for the server before rejecting with a timeout error. Defaults to `10000`; `0` disables it.
 
 ### Connection Management
 

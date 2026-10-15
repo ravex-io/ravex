@@ -229,10 +229,17 @@ export class ChatEngine {
         status: user.status || 'online',
         connectedAt: new Date(),
       })
+    } else if (!wasOnline) {
+      existing.connectedAt = new Date()
     }
     this.userManager.addSocketId(user.id, socketId)
     if (!wasOnline) {
       this.ns.emit('user:online', { id: user.id, username: user.username })
+    }
+    if (existing && !wasOnline) {
+      // Coming back after being fully disconnected: offline -> online through the shared status path,
+      // which broadcasts user:status and calls onStatusChange with the previous status.
+      this.presenceHandler.setStatus(user.id, user.status || 'online')
     }
   }
 
@@ -240,12 +247,9 @@ export class ChatEngine {
     this.userManager.removeSocketId(userId, socketId)
     this.typingHandler.clearForSocket(socketId)
     if (!this.userManager.isConnected(userId)) {
-      const user = this.userManager.get(userId)
-      const lastSeen = new Date()
-      if (user) {
-        user.lastSeen = lastSeen
-        this.userManager.set(userId, user)
-      }
+      // Shared status path: stores 'offline' and lastSeen, broadcasts user:status and calls onStatusChange.
+      this.presenceHandler.setStatus(userId, 'offline')
+      const lastSeen = this.userManager.get(userId)?.lastSeen ?? new Date()
       this.ns.emit('user:offline', { id: userId, username, lastSeen })
       this.typingHandler.clearAll(userId)
       this.presenceHandler.clearAll(userId)
@@ -267,7 +271,7 @@ export class ChatEngine {
         }
         this.roomManager.addMember(roomId, user.id)
       }
-      socket.join(roomId)
+      this.joinUserSockets(user.id, roomId)
       if (!wasMember) {
         this.ns.to(roomId).emit('room:user_joined', {
           roomId,
@@ -285,7 +289,7 @@ export class ChatEngine {
       const user = socket.data.user
       const { roomId } = data
       if (!roomId) throw new ChatError('roomId required', ErrorCodes.VALIDATION)
-      socket.leave(roomId)
+      this.leaveUserSockets(user.id, roomId)
       if (this.roomManager.isMember(roomId, user.id)) {
         this.roomManager.removeMember(roomId, user.id)
         this.ns.to(roomId).emit('room:user_left', {
@@ -358,6 +362,20 @@ export class ChatEngine {
     const user = socket.data.user
     const rooms = this.roomManager.getRoomsForUser(user.id)
     ack({ ok: true, data: rooms })
+  }
+
+  /** Subscribes every open tab (socket) of a user to a room, not just the one that asked. */
+  private joinUserSockets(userId: string, roomId: string): void {
+    for (const sid of this.userManager.get(userId)?.socketIds ?? []) {
+      this.ns.sockets.get(sid)?.join(roomId)
+    }
+  }
+
+  /** Unsubscribes every open tab (socket) of a user from a room. */
+  private leaveUserSockets(userId: string, roomId: string): void {
+    for (const sid of this.userManager.get(userId)?.socketIds ?? []) {
+      this.ns.sockets.get(sid)?.leave(roomId)
+    }
   }
 
   private sendAckError(ack: ErrorAck, err: unknown): void {

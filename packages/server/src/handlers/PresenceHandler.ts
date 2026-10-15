@@ -84,7 +84,11 @@ export class PresenceHandler {
     this.clearAwayTimer(userId)
   }
 
-  private setStatus(userId: string, status: UserStatus): void {
+  /**
+   * The single path for status changes: stores the status (and lastSeen), broadcasts user:status and
+   * calls onStatusChange with the previous status. No-op when the status doesn't change.
+   */
+  setStatus(userId: string, status: UserStatus): void {
     const result = this.userManager.updateStatus(userId, status)
     if (!result) return
 
