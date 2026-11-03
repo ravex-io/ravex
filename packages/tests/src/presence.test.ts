@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
-import type { User } from '@ravex/types'
+import type { User, ServerToClientEvents } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Presence', () => {
   let server: TestServer
@@ -25,26 +26,30 @@ describe('Presence', () => {
 
   it('should broadcast status changes to other users', async () => {
     clientB = await createConnectedClient(server.port, userB)
-    
-    const statusPromise = new Promise<any>((resolve) => {
-      clientB.onUserStatus((data) => {
-        if (data.id === userA.id) resolve(data)
-      })
-    })
+
+    const statusPromise = new Promise<Parameters<ServerToClientEvents['user:status']>[0]>(
+      (resolve) => {
+        clientB.onUserStatus((data) => {
+          if (data.id === userA.id) resolve(data)
+        })
+      },
+    )
 
     clientA.setStatus('away')
-    
+
     const statusData = await statusPromise
     expect(statusData.id).toBe(userA.id)
     expect(statusData.status).toBe('away')
   })
 
   it('should receive heartbeat pings', async () => {
-    const heartbeatPromise = new Promise<any>((resolve) => {
-      // The client responds to presence:heartbeat automatically by sending presence:ping
-      // We'll just verify the client receives the server heartbeat
-      clientA.socket.on('presence:heartbeat', (data) => resolve(data))
-    })
+    const heartbeatPromise = new Promise<Parameters<ServerToClientEvents['presence:heartbeat']>[0]>(
+      (resolve) => {
+        // The client responds to presence:heartbeat automatically by sending presence:ping
+        // We'll just verify the client receives the server heartbeat
+        clientA.on('presence:heartbeat', (data) => resolve(data))
+      },
+    )
 
     const heartbeatData = await heartbeatPromise
     expect(heartbeatData.ts).toBeDefined()

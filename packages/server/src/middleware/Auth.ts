@@ -1,4 +1,5 @@
 import type { User, UserStatus } from '@ravex/types'
+
 import type { TypedSocket } from '../ChatEngine.js'
 import { logger } from '../utils/logger.js'
 
@@ -24,7 +25,8 @@ export const AUTH_FAILED_MESSAGE = 'Authentication failed'
 
 const STATUSES: readonly UserStatus[] = ['online', 'offline', 'away', 'busy']
 
-const optionalString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
 
 /**
  * Builds a clean `User` from an untrusted identity object, copying only known fields.
@@ -37,9 +39,10 @@ export const toUser = (identity: unknown): User | null => {
   if (typeof id !== 'string' || id.trim() === '') return null
 
   const status = STATUSES.find((s) => s === raw.status) ?? 'online'
-  const metadata = typeof raw.metadata === 'object' && raw.metadata !== null && !Array.isArray(raw.metadata)
-    ? (raw.metadata as Record<string, unknown>)
-    : undefined
+  const metadata =
+    typeof raw.metadata === 'object' && raw.metadata !== null && !Array.isArray(raw.metadata)
+      ? (raw.metadata as Record<string, unknown>)
+      : undefined
 
   return {
     id,
@@ -80,7 +83,10 @@ export const warnAuthConfig = ({ authenticate, insecureTrustClientUser }: AuthOp
  * - With `insecureTrustClientUser`: the client-provided `handshake.auth.user` is trusted (development only).
  * - Otherwise: every connection is rejected.
  */
-export const resolveUser = async (handshake: Handshake, options: AuthOptions): Promise<User | null> => {
+export const resolveUser = async (
+  handshake: Handshake,
+  options: AuthOptions,
+): Promise<User | null> => {
   if (options.authenticate) return toUser(await options.authenticate(handshake))
   if (!options.insecureTrustClientUser) return null
   const auth = handshake.auth as { user?: unknown } | undefined

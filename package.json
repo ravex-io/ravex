@@ -10,10 +10,12 @@
   },
   "scripts": {
     "build": "pnpm --filter @ravex/types build && pnpm --filter @ravex/server build && pnpm --filter @ravex/client build",
-    "lint": "oxlint packages/*/src",
+    "lint": "oxlint packages/*/src --deny-warnings",
     "lint:fix": "oxlint --fix packages/*/src",
     "format": "oxfmt packages/*/src --write",
     "format:check": "oxfmt packages/*/src --check",
+    "typecheck": "tsc --noEmit -p packages/types/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/client/tsconfig.json && tsc --noEmit -p packages/tests/tsconfig.json",
+    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",
     "test": "pnpm --filter @ravex/tests test",
     "test:coverage": "pnpm --filter @ravex/tests test:coverage"
   },

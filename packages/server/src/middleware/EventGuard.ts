@@ -1,4 +1,5 @@
 import type { ClientToServerEvents } from '@ravex/types'
+
 import type { ChatEngineOptions, TypedSocket } from '../ChatEngine.js'
 import { ErrorCodes } from '../utils/errors.js'
 import { logger } from '../utils/logger.js'
@@ -39,7 +40,8 @@ const noop = (): void => {}
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const isFunction = (value: unknown): value is (...args: unknown[]) => void => typeof value === 'function'
+const isFunction = (value: unknown): value is (...args: unknown[]) => void =>
+  typeof value === 'function'
 
 /**
  * Per-socket middleware that normalises incoming events before any handler runs:
@@ -60,7 +62,13 @@ export const validateEvents = (socket: TypedSocket): void => {
     if (shape.payload && !isPlainObject(payload)) {
       logger.debug(`Rejected "${event}" from socket ${socket.id}: payload must be an object`)
       if (shape.ack && ack) {
-        ack({ ok: false, error: { code: ErrorCodes.VALIDATION, message: `Invalid payload for "${event}": expected an object` } })
+        ack({
+          ok: false,
+          error: {
+            code: ErrorCodes.VALIDATION,
+            message: `Invalid payload for "${event}": expected an object`,
+          },
+        })
       }
       return
     }
@@ -106,7 +114,10 @@ type AnyCallback = (...args: unknown[]) => unknown
  * is logged instead of crashing the process. Callbacks are notifications: their errors never change
  * what the client receives.
  */
-export const safeCallback = (name: string, callback: AnyCallback): ((...args: unknown[]) => void) => {
+export const safeCallback = (
+  name: string,
+  callback: AnyCallback,
+): ((...args: unknown[]) => void) => {
   const fail = (err: unknown): void => logger.error(`Error in "${name}" callback:`, err)
   return (...args) => {
     try {
@@ -120,7 +131,15 @@ export const safeCallback = (name: string, callback: AnyCallback): ((...args: un
   }
 }
 
-const CALLBACKS = ['onMessage', 'onEdit', 'onDelete', 'onRead', 'onReaction', 'onStatusChange'] as const
+const CALLBACKS = [
+  'onMessage',
+  'onEdit',
+  'onDelete',
+  'onRead',
+  'onReaction',
+  'onStatusChange',
+  'onFlagged',
+] as const
 
 /** Returns a copy of the options with every application callback wrapped in `safeCallback`. */
 export const guardCallbacks = (options: ChatEngineOptions): ChatEngineOptions => {

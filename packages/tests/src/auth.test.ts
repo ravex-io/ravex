@@ -1,13 +1,18 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
 import { spawnSync } from 'child_process'
-import { fileURLToPath } from 'url'
-import { ChatClient } from '@ravex/client'
-import { ChatEngine, type Authenticate, type ChatEngineOptions } from '@ravex/server'
 import { createServer as createHttpServer } from 'http'
 import type { AddressInfo } from 'net'
+import { fileURLToPath } from 'url'
+
+import { ChatClient } from '@ravex/client'
+import { ChatEngine, type Authenticate, type ChatEngineOptions } from '@ravex/server'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+
 import { createServer, type TestServer } from './helpers/setup.js'
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 /** The socket.io Server class, taken from a ChatEngine so this package doesn't need socket.io as a dependency. */
 const IoServer = (() => {
@@ -33,7 +38,11 @@ async function start(options: ChatEngineOptions = {}) {
 
 /** Connects with a raw `auth` payload. Resolves with the client, or rejects with the connect_error. */
 function connectWith(auth: Record<string, unknown>): Promise<ChatClient> {
-  const client = new ChatClient({ url: `http://localhost:${server.port}`, auth, autoConnect: false })
+  const client = new ChatClient({
+    url: `http://localhost:${server.port}`,
+    auth,
+    autoConnect: false,
+  })
   clients.push(client)
   return new Promise((resolve, reject) => {
     client.rawSocket.on('connect', () => resolve(client))
@@ -50,21 +59,30 @@ afterEach(async () => {
 
 /** Runs the warning fixture in a fresh process and returns its stderr. */
 function startupWarnings(options: Record<string, unknown>): string {
-  return spawnSync(process.execPath, [warningsFixture, JSON.stringify(options)], { encoding: 'utf8', timeout: 10000 }).stderr
+  return spawnSync(process.execPath, [warningsFixture, JSON.stringify(options)], {
+    encoding: 'utf8',
+    timeout: 10000,
+  }).stderr
 }
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1
 
 describe('Without authenticate (secure default)', () => {
   it('rejects every connection, even with a well-formed auth.user', async () => {
     await start({ insecureTrustClientUser: false })
-    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow('Authentication failed')
+    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow(
+      'Authentication failed',
+    )
     expect(server.engine.getUser('alice')).toBeUndefined()
   })
 
   it('reproduces the issue scenario: the impersonator cannot connect at all', async () => {
     await start({ insecureTrustClientUser: false })
-    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow('Authentication failed')
-    await expect(connectWith({ user: { id: 'admin', username: 'admin' }, token: 'anything' })).rejects.toThrow('Authentication failed')
+    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow(
+      'Authentication failed',
+    )
+    await expect(
+      connectWith({ user: { id: 'admin', username: 'admin' }, token: 'anything' }),
+    ).rejects.toThrow('Authentication failed')
   })
 
   it('warns once at startup that all connections will be rejected', () => {
@@ -109,7 +127,14 @@ describe('With insecureTrustClientUser: true (development only)', () => {
   it('ignores server-managed fields sent by the client', async () => {
     await start({ insecureTrustClientUser: true })
     await connectWith({
-      user: { id: 'alice', username: 'alice', status: 'superadmin', socketIds: ['fake-socket'], lastSeen: 'never', extra: 'x' },
+      user: {
+        id: 'alice',
+        username: 'alice',
+        status: 'superadmin',
+        socketIds: ['fake-socket'],
+        lastSeen: 'never',
+        extra: 'x',
+      },
     })
     const stored = server.engine.getUser('alice')
     expect(stored?.status).toBe('online')
@@ -130,7 +155,8 @@ describe('With authenticate', () => {
     'token-alice': { id: 'alice', username: 'Alice' },
     'token-bob': { id: 'bob', username: 'Bob' },
   }
-  const byToken: Authenticate = (handshake) => tokens[String((handshake.auth as { token?: unknown }).token)]
+  const byToken: Authenticate = (handshake) =>
+    tokens[String((handshake.auth as { token?: unknown }).token)]
 
   it('connects as the user the server resolves from the token', async () => {
     await start({ authenticate: byToken })
@@ -148,10 +174,12 @@ describe('With authenticate', () => {
 
   it('ignores a client-provided auth.user, even with insecureTrustClientUser set', async () => {
     await start({ authenticate: byToken, insecureTrustClientUser: true })
-    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow('Authentication failed')
+    await expect(connectWith({ user: { id: 'alice', username: 'alice' } })).rejects.toThrow(
+      'Authentication failed',
+    )
   })
 
-  it('stops the impersonation from the issue: claiming to be alice with bob\'s token', async () => {
+  it("stops the impersonation from the issue: claiming to be alice with bob's token", async () => {
     await start({ authenticate: byToken })
     const alice = await connectWith({ token: 'token-alice' })
     const room = await alice.createRoom({ type: 'group' })
@@ -167,7 +195,9 @@ describe('With authenticate', () => {
   it('supports an async authenticate', async () => {
     await start({
       authenticate: async (handshake) => {
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise((resolve) => {
+          setTimeout(resolve, 50)
+        })
         return byToken(handshake)
       },
     })
@@ -210,7 +240,11 @@ describe('With authenticate', () => {
     let seen: { auth: unknown; hasHeaders: boolean; address: string } | undefined
     await start({
       authenticate: (handshake) => {
-        seen = { auth: handshake.auth, hasHeaders: typeof handshake.headers === 'object', address: handshake.address }
+        seen = {
+          auth: handshake.auth,
+          hasHeaders: typeof handshake.headers === 'object',
+          address: handshake.address,
+        }
         return { id: 'alice' }
       },
     })
@@ -253,7 +287,9 @@ describe('Connection state recovery', () => {
   async function dropConnection(client: ChatClient, userId: string) {
     client.rawSocket.io.reconnection(false)
     client.rawSocket.io.engine.close()
-    for (let i = 0; i < 50 && server.engine.getUser(userId)?.socketIds.length; i++) await sleep(10)
+    await vi.waitFor(() => expect(server.engine.getUser(userId)?.socketIds.length ?? 0).toBe(0), {
+      interval: 10,
+    })
   }
 
   /** Reconnects with the same session; resolves 'connected' or the connect_error message. */
@@ -286,8 +322,10 @@ describe('Connection state recovery', () => {
     delete tokens['token-alice']
 
     expect(await reconnect(alice)).toBe('Authentication failed')
-    expect(authCalls).toBe(3) // alice, bob, alice again
-    expect(onWire).not.toContain('message:new') // missed messages are not replayed to a rejected client
+    // alice, bob, alice again
+    expect(authCalls).toBe(3)
+    // missed messages are not replayed to a rejected client
+    expect(onWire).not.toContain('message:new')
     expect(server.engine.getRoom(roomId)).toBeDefined()
   })
 
@@ -332,7 +370,8 @@ describe('Connection state recovery', () => {
     expect(await reconnect(alice)).toBe('connected')
     await bob.sendMessage({ roomId, content: 'after recovery' })
     await sleep(100)
-    expect(onWire).not.toContain('message:new') // neither alice's missed messages nor her rooms carry over
+    // neither alice's missed messages nor her rooms carry over
+    expect(onWire).not.toContain('message:new')
     expect(await alice.listRooms()).toEqual([])
     await expect(alice.deleteRoom(roomId)).rejects.toThrow('Admin only')
   })
@@ -344,15 +383,24 @@ describe('Connection state recovery', () => {
     tokens = { 'token-alice': { id: 'alice', username: 'alice' } }
     authCalls = 0
     const engine = new ChatEngine(io, { authenticate })
-    await new Promise<void>((resolve) => http.listen(0, () => resolve()))
-    const alice = new ChatClient({ url: `http://localhost:${(http.address() as AddressInfo).port}`, auth: { token: 'token-alice' } })
+    await new Promise<void>((resolve) => {
+      http.listen(0, () => resolve())
+    })
+    const alice = new ChatClient({
+      url: `http://localhost:${(http.address() as AddressInfo).port}`,
+      auth: { token: 'token-alice' },
+    })
     clients.push(alice)
-    await new Promise<void>((resolve) => alice.rawSocket.on('connect', () => resolve()))
+    await new Promise<void>((resolve) => {
+      alice.rawSocket.on('connect', () => resolve())
+    })
     const room = await alice.createRoom({ type: 'group' })
 
     alice.rawSocket.io.reconnection(false)
     alice.rawSocket.io.engine.close()
-    for (let i = 0; i < 50 && engine.getUser('alice')?.socketIds.length; i++) await sleep(10)
+    await vi.waitFor(() => expect(engine.getUser('alice')?.socketIds.length ?? 0).toBe(0), {
+      interval: 10,
+    })
     delete tokens['token-alice']
 
     expect(await reconnect(alice)).toBe('Authentication failed')

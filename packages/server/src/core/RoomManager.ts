@@ -1,6 +1,8 @@
-import type { Room, ChatType } from '@ravex/types'
-import { ChatError, ErrorCodes } from '../utils/errors.js'
 import { randomUUID } from 'crypto'
+
+import type { Room, ChatType } from '@ravex/types'
+
+import { ChatError, ErrorCodes } from '../utils/errors.js'
 
 const ROOM_ID_DISPLAY_LENGTH = 6
 
@@ -63,7 +65,9 @@ export class RoomManager {
 
     const room: Room = {
       id,
-      name: name ?? (type === 'personal' ? 'Direct Message' : `Room ${id.slice(0, ROOM_ID_DISPLAY_LENGTH)}`),
+      name:
+        name ??
+        (type === 'personal' ? 'Direct Message' : `Room ${id.slice(0, ROOM_ID_DISPLAY_LENGTH)}`),
       type,
       members: memberList,
       admins: adminList,
@@ -98,11 +102,11 @@ export class RoomManager {
   removeMember(roomId: string, userId: string): void {
     const room = this.get(roomId)
     if (!room) return
-    room.members = room.members.filter(id => id !== userId)
+    room.members = room.members.filter((id) => id !== userId)
     this.set(roomId, room)
   }
 
   getRoomsForUser(userId: string): Room[] {
-    return this.getAll().filter(r => r.members.includes(userId))
+    return this.getAll().filter((r) => r.members.includes(userId))
   }
 }

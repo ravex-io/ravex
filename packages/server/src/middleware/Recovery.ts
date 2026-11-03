@@ -1,4 +1,5 @@
 import type { Server } from 'socket.io'
+
 import type { TypedNamespace, TypedSocket } from '../ChatEngine.js'
 import { logger } from '../utils/logger.js'
 
@@ -85,9 +86,13 @@ export class RecoveryGuard {
     const writer = socket as unknown as PacketWriter
     for (const packet of missed) {
       const payload = packet[1]
-      const roomId = typeof payload === 'object' && payload !== null ? (payload as { roomId?: unknown }).roomId : undefined
+      const roomId =
+        typeof payload === 'object' && payload !== null
+          ? (payload as { roomId?: unknown }).roomId
+          : undefined
       // Drop packets for rooms the user has left or been removed from since disconnecting.
-      if (typeof roomId !== 'string' || isMember(roomId)) writer.packet({ type: EVENT_PACKET, data: packet })
+      if (typeof roomId !== 'string' || isMember(roomId))
+        writer.packet({ type: EVENT_PACKET, data: packet })
     }
   }
 }

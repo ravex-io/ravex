@@ -1,9 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { spawnSync } from 'child_process'
 import { fileURLToPath } from 'url'
+
 import type { ChatClient } from '@ravex/client'
-import type { AckResponse, User } from '@ravex/types'
 import type { ChatEngineOptions } from '@ravex/server'
+import type { AckResponse, User } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
 import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 const probe = fileURLToPath(new URL('./fixtures/malformed-events.mjs', import.meta.url))
@@ -17,10 +19,22 @@ function runProbe(arg: string): { alive: boolean; crash: string } {
 
 describe('Robustness: malformed events', () => {
   const events = [
-    'message:send', 'message:edit', 'message:delete', 'message:read', 'message:react', 'message:history',
-    'typing:start', 'typing:stop',
-    'room:join', 'room:leave', 'room:create', 'room:delete', 'room:members', 'room:list',
-    'presence:ping', 'presence:status',
+    'message:send',
+    'message:edit',
+    'message:delete',
+    'message:read',
+    'message:react',
+    'message:history',
+    'typing:start',
+    'typing:stop',
+    'room:join',
+    'room:leave',
+    'room:create',
+    'room:delete',
+    'room:members',
+    'room:list',
+    'presence:ping',
+    'presence:status',
   ]
 
   it.each(events)('does not crash when "%s" is emitted with no payload and no ack', (event) => {
@@ -37,11 +51,25 @@ describe('Robustness: malformed events', () => {
 const callbackProbe = fileURLToPath(new URL('./fixtures/callback-errors.mjs', import.meta.url))
 
 describe('Robustness: failing application callbacks', () => {
-  const targets = ['onMessage', 'onEdit', 'onDelete', 'onRead', 'onReaction', 'onStatusChange', 'onStatusChange:away']
-  const cases = targets.flatMap((target) => [[target, 'async'], [target, 'sync']])
+  const targets = [
+    'onMessage',
+    'onEdit',
+    'onDelete',
+    'onRead',
+    'onReaction',
+    'onStatusChange',
+    'onStatusChange:away',
+  ]
+  const cases = targets.flatMap((target) => [
+    [target, 'async'],
+    [target, 'sync'],
+  ])
 
   it.each(cases)('does not crash when %s fails (%s)', (target, mode) => {
-    const res = spawnSync(process.execPath, [callbackProbe, target, mode], { encoding: 'utf8', timeout: 15000 })
+    const res = spawnSync(process.execPath, [callbackProbe, target, mode], {
+      encoding: 'utf8',
+      timeout: 15000,
+    })
     const crash = res.stderr.split('\n').find((line) => /^\w*Error/u.test(line)) ?? ''
     expect(res.stdout, 'callback was never called').toContain('CALLED')
     expect(res.stdout, `server crashed: ${crash}`).toContain('ALIVE')
@@ -62,10 +90,14 @@ describe('Robustness: validation responses', () => {
   function emitRaw(event: string, ...args: unknown[]): Promise<AckResponse<unknown>> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`no ack for ${event}`)), 2000)
-      ;(client.rawSocket as unknown as { emit(e: string, ...a: unknown[]): void }).emit(event, ...args, (res: AckResponse<unknown>) => {
-        clearTimeout(timer)
-        resolve(res)
-      })
+      ;(client.rawSocket as unknown as { emit(e: string, ...a: unknown[]): void }).emit(
+        event,
+        ...args,
+        (res: AckResponse<unknown>) => {
+          clearTimeout(timer)
+          resolve(res)
+        },
+      )
     })
   }
 
@@ -88,20 +120,33 @@ describe('Robustness: validation responses', () => {
     const res = await emitRaw('room:join', ...args)
     expect(res).toEqual({
       ok: false,
-      error: { code: 'VALIDATION_ERROR', message: 'Invalid payload for "room:join": expected an object' },
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Invalid payload for "room:join": expected an object',
+      },
     })
   })
 
   it('validates every event that takes a payload and an ack', async () => {
     const ackEvents = [
-      'message:send', 'message:edit', 'message:delete', 'message:react', 'message:history',
-      'room:join', 'room:leave', 'room:create', 'room:delete', 'room:members',
+      'message:send',
+      'message:edit',
+      'message:delete',
+      'message:react',
+      'message:history',
+      'room:join',
+      'room:leave',
+      'room:create',
+      'room:delete',
+      'room:members',
     ]
-    for (const event of ackEvents) {
-      const res = await emitRaw(event, null)
-      expect(res.ok, event).toBe(false)
-      if (!res.ok) expect(res.error.code, event).toBe('VALIDATION_ERROR')
-    }
+    await Promise.all(
+      ackEvents.map(async (event) => {
+        const res = await emitRaw(event, null)
+        expect(res.ok, event).toBe(false)
+        if (!res.ok) expect(res.error.code, event).toBe('VALIDATION_ERROR')
+      }),
+    )
   })
 
   it('still answers valid requests and ignores extra arguments', async () => {

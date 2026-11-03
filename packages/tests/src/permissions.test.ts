@@ -1,16 +1,21 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import type { ChatClient } from '@ravex/client'
 import type { ChatEngineOptions, PersistenceAdapter } from '@ravex/server'
 import type { Message, ServerToClientEvents, User } from '@ravex/types'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 const mkUser = (id: string): User => ({ id, username: id, status: 'online', socketIds: [] })
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 /** Collects every payload of `event` that `client` receives from now on. */
 function record<K extends keyof ServerToClientEvents>(client: ChatClient, event: K) {
   const events: Parameters<ServerToClientEvents[K]>[0][] = []
-  client.on(event, ((data: Parameters<ServerToClientEvents[K]>[0]) => events.push(data)) as ServerToClientEvents[K])
+  client.on(event, ((data: Parameters<ServerToClientEvents[K]>[0]) =>
+    events.push(data)) as ServerToClientEvents[K])
   return events
 }
 
@@ -18,10 +23,20 @@ function record<K extends keyof ServerToClientEvents>(client: ChatClient, event:
 function memoryStore({ withGetMessage = true, historyWindow = 50 } = {}) {
   const messages: Message[] = []
   const store: PersistenceAdapter = {
-    async saveMessage(m) { messages.push({ ...m }) },
-    async getMessages(roomId, limit = historyWindow) { return messages.filter((m) => m.roomId === roomId).slice(-limit) },
-    async updateMessage(id, u) { const m = messages.find((x) => x.id === id); if (m) Object.assign(m, u) },
-    async deleteMessage(id) { const i = messages.findIndex((x) => x.id === id); if (i >= 0) messages.splice(i, 1) },
+    async saveMessage(m) {
+      messages.push({ ...m })
+    },
+    async getMessages(roomId, limit = historyWindow) {
+      return messages.filter((m) => m.roomId === roomId).slice(-limit)
+    },
+    async updateMessage(id, u) {
+      const m = messages.find((x) => x.id === id)
+      if (m) Object.assign(m, u)
+    },
+    async deleteMessage(id) {
+      const i = messages.findIndex((x) => x.id === id)
+      if (i >= 0) messages.splice(i, 1)
+    },
   }
   if (withGetMessage) store.getMessage = async (id) => messages.find((m) => m.id === id)
   return { store, messages }
@@ -31,7 +46,10 @@ let server: TestServer
 const clients: ChatClient[] = []
 
 async function start(options: ChatEngineOptions = {}) {
-  server = await createServer({ ...options, message: { allowEdits: true, allowDeletes: true, ...options.message } })
+  server = await createServer({
+    ...options,
+    message: { allowEdits: true, allowDeletes: true, ...options.message },
+  })
 }
 async function connect(id: string) {
   const client = await createConnectedClient(server.port, mkUser(id))
@@ -47,7 +65,10 @@ afterEach(async () => {
 const storageModes: [string, () => ChatEngineOptions][] = [
   ['without persistence', () => ({})],
   ['with persistence (getMessage)', () => ({ persistence: memoryStore().store })],
-  ['with persistence (no getMessage)', () => ({ persistence: memoryStore({ withGetMessage: false }).store })],
+  [
+    'with persistence (no getMessage)',
+    () => ({ persistence: memoryStore({ withGetMessage: false }).store }),
+  ],
 ]
 
 describe.each(storageModes)('Message permissions %s', (_label, options) => {
@@ -65,7 +86,9 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
   it('rejects a non-member reacting, and nothing is broadcast', async () => {
     const { bob, mallory, roomId, msg } = await setup()
     const seen = record(bob, 'message:reaction')
-    await expect(mallory.sendReaction(msg.id, roomId, '💩')).rejects.toThrow('Not a member of this room')
+    await expect(mallory.sendReaction(msg.id, roomId, '💩')).rejects.toThrow(
+      'Not a member of this room',
+    )
     await sleep(100)
     expect(seen).toHaveLength(0)
   })
@@ -82,7 +105,9 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
     const { bob, mallory, roomId, msg } = await setup()
     const edits = record(bob, 'message:edited')
     const deletes = record(bob, 'message:deleted')
-    await expect(mallory.editMessage({ messageId: msg.id, roomId, content: 'hacked' })).rejects.toThrow('Not a member of this room')
+    await expect(
+      mallory.editMessage({ messageId: msg.id, roomId, content: 'hacked' }),
+    ).rejects.toThrow('Not a member of this room')
     await expect(mallory.deleteMessage(msg.id, roomId)).rejects.toThrow('Not a member of this room')
     await sleep(100)
     expect(edits).toHaveLength(0)
@@ -92,7 +117,9 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
   it("rejects a member editing someone else's message", async () => {
     const { bob, roomId, msg } = await setup()
     const edits = record(bob, 'message:edited')
-    await expect(bob.editMessage({ messageId: msg.id, roomId, content: 'forged' })).rejects.toThrow("Cannot edit another user's message")
+    await expect(bob.editMessage({ messageId: msg.id, roomId, content: 'forged' })).rejects.toThrow(
+      "Cannot edit another user's message",
+    )
     await sleep(100)
     expect(edits).toHaveLength(0)
   })
@@ -101,7 +128,9 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
     const { alice, bob, roomId } = await setup()
     const bobsMsg = await bob.sendMessage({ roomId, content: 'mine' })
     const otherMsg = await alice.sendMessage({ roomId, content: 'not yours' })
-    await expect(bob.deleteMessage(otherMsg.id, roomId)).rejects.toThrow("Cannot delete another user's message")
+    await expect(bob.deleteMessage(otherMsg.id, roomId)).rejects.toThrow(
+      "Cannot delete another user's message",
+    )
     await expect(bob.deleteMessage(bobsMsg.id, roomId)).resolves.toBeUndefined()
   })
 
@@ -131,7 +160,9 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
 
   it('returns MESSAGE_NOT_FOUND for unknown message ids', async () => {
     const { alice, roomId } = await setup()
-    await expect(alice.editMessage({ messageId: 'nope', roomId, content: 'x' })).rejects.toThrow('Message not found')
+    await expect(alice.editMessage({ messageId: 'nope', roomId, content: 'x' })).rejects.toThrow(
+      'Message not found',
+    )
     await expect(alice.deleteMessage('nope', roomId)).rejects.toThrow('Message not found')
     await expect(alice.sendReaction('nope', roomId, '👍')).rejects.toThrow('Message not found')
   })
@@ -142,33 +173,47 @@ describe.each(storageModes)('Message permissions %s', (_label, options) => {
     const bobsRoom = await bob.createRoom({ type: 'group' })
     const ownMsgElsewhere = await bob.sendMessage({ roomId, content: 'bob in shared room' })
     await expect(bob.deleteMessage(msg.id, bobsRoom.id)).rejects.toThrow('Message not found')
-    await expect(bob.editMessage({ messageId: ownMsgElsewhere.id, roomId: bobsRoom.id, content: 'x' })).rejects.toThrow('Message not found')
-    await expect(alice.editMessage({ messageId: msg.id, roomId, content: 'still works' })).resolves.toBeTruthy()
+    await expect(
+      bob.editMessage({ messageId: ownMsgElsewhere.id, roomId: bobsRoom.id, content: 'x' }),
+    ).rejects.toThrow('Message not found')
+    await expect(
+      alice.editMessage({ messageId: msg.id, roomId, content: 'still works' }),
+    ).resolves.toBeTruthy()
   })
 
   it('cannot edit a message after it was deleted', async () => {
     const { alice, roomId, msg } = await setup()
     await alice.deleteMessage(msg.id, roomId)
-    await expect(alice.editMessage({ messageId: msg.id, roomId, content: 'ghost' })).rejects.toThrow('Message not found')
+    await expect(
+      alice.editMessage({ messageId: msg.id, roomId, content: 'ghost' }),
+    ).rejects.toThrow('Message not found')
   })
 
   it('loses access after leaving or being kicked from the room', async () => {
     const { alice, bob, roomId, msg } = await setup()
     const bobsMsg = await bob.sendMessage({ roomId, content: 'before leaving' })
     await bob.leaveRoom(roomId)
-    await expect(bob.editMessage({ messageId: bobsMsg.id, roomId, content: 'x' })).rejects.toThrow('Not a member of this room')
-    await expect(bob.sendReaction(msg.id, roomId, '👍')).rejects.toThrow('Not a member of this room')
+    await expect(bob.editMessage({ messageId: bobsMsg.id, roomId, content: 'x' })).rejects.toThrow(
+      'Not a member of this room',
+    )
+    await expect(bob.sendReaction(msg.id, roomId, '👍')).rejects.toThrow(
+      'Not a member of this room',
+    )
 
     const carol = await connect('carol')
     await carol.joinRoom(roomId)
     server.engine.kickUser(roomId, 'carol')
-    await expect(carol.sendReaction(msg.id, roomId, '👍')).rejects.toThrow('Not a member of this room')
+    await expect(carol.sendReaction(msg.id, roomId, '👍')).rejects.toThrow(
+      'Not a member of this room',
+    )
     await expect(alice.sendReaction(msg.id, roomId, '👍')).resolves.toBeUndefined()
   })
 
   it('returns ROOM_NOT_FOUND for unknown rooms', async () => {
     const { alice, msg } = await setup()
-    await expect(alice.editMessage({ messageId: msg.id, roomId: 'nope', content: 'x' })).rejects.toThrow('Room not found')
+    await expect(
+      alice.editMessage({ messageId: msg.id, roomId: 'nope', content: 'x' }),
+    ).rejects.toThrow('Room not found')
     await expect(alice.sendReaction(msg.id, 'nope', '👍')).rejects.toThrow('Room not found')
   })
 })
@@ -182,8 +227,12 @@ describe('Message permissions with persistence: lookups', () => {
     const room = await alice.createRoom({ type: 'group', members: ['bob'] })
     const old = await alice.sendMessage({ roomId: room.id, content: 'old' })
     await alice.sendMessage({ roomId: room.id, content: 'newer' })
-    await expect(bob.editMessage({ messageId: old.id, roomId: room.id, content: 'forged' })).rejects.toThrow("Cannot edit another user's message")
-    await expect(alice.editMessage({ messageId: old.id, roomId: room.id, content: 'fine' })).resolves.toBeTruthy()
+    await expect(
+      bob.editMessage({ messageId: old.id, roomId: room.id, content: 'forged' }),
+    ).rejects.toThrow("Cannot edit another user's message")
+    await expect(
+      alice.editMessage({ messageId: old.id, roomId: room.id, content: 'fine' }),
+    ).resolves.toBeTruthy()
   })
 
   it('treats soft-deleted messages (deletedAt) as not found', async () => {
@@ -193,7 +242,9 @@ describe('Message permissions with persistence: lookups', () => {
     const room = await alice.createRoom({ type: 'group' })
     const msg = await alice.sendMessage({ roomId: room.id, content: 'soon gone' })
     messages[0].deletedAt = new Date()
-    await expect(alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'x' })).rejects.toThrow('Message not found')
+    await expect(
+      alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'x' }),
+    ).rejects.toThrow('Message not found')
   })
 
   it('persists the edit and returns the full updated message', async () => {
@@ -203,7 +254,13 @@ describe('Message permissions with persistence: lookups', () => {
     const room = await alice.createRoom({ type: 'group' })
     const msg = await alice.sendMessage({ roomId: room.id, content: 'v1' })
     const edited = await alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'v2' })
-    expect(edited).toMatchObject({ id: msg.id, content: 'v2', senderId: 'alice', senderName: 'alice', type: 'text' })
+    expect(edited).toMatchObject({
+      id: msg.id,
+      content: 'v2',
+      senderId: 'alice',
+      senderName: 'alice',
+      type: 'text',
+    })
     expect(messages[0].content).toBe('v2')
   })
 })
@@ -260,14 +317,20 @@ describe('Room permissions', () => {
   it('rejects creating a room with more members than maxMembers', async () => {
     await start()
     const alice = await connect('alice')
-    await expect(alice.createRoom({ type: 'group', maxMembers: 2, members: ['bob', 'carol'] })).rejects.toThrow('Too many members (max 2)')
-    await expect(alice.createRoom({ type: 'group', maxMembers: 2, members: ['bob'] })).resolves.toBeTruthy()
+    await expect(
+      alice.createRoom({ type: 'group', maxMembers: 2, members: ['bob', 'carol'] }),
+    ).rejects.toThrow('Too many members (max 2)')
+    await expect(
+      alice.createRoom({ type: 'group', maxMembers: 2, members: ['bob'] }),
+    ).resolves.toBeTruthy()
   })
 
   it.each([0, -1, 1.5])('rejects maxMembers = %s', async (maxMembers) => {
     await start()
     const alice = await connect('alice')
-    await expect(alice.createRoom({ type: 'group', maxMembers })).rejects.toThrow('maxMembers must be a positive integer')
+    await expect(alice.createRoom({ type: 'group', maxMembers })).rejects.toThrow(
+      'maxMembers must be a positive integer',
+    )
   })
 
   it('returns "Room not found" when deleting a room that does not exist', async () => {
@@ -288,26 +351,47 @@ describe('Room permissions', () => {
 
 describe('Review follow-ups', () => {
   it('passes the content from before the edit to onEdit', async () => {
-    const { store } = memoryStore() // returns its stored (mutable) objects, like many real adapters
+    // returns its stored (mutable) objects, like many real adapters
+    const { store } = memoryStore()
     const calls: [string, string][] = []
-    await start({ persistence: store, onEdit: (m, previous) => { calls.push([m.content, previous]) } })
+    await start({
+      persistence: store,
+      onEdit: (m, previous) => {
+        calls.push([m.content, previous])
+      },
+    })
     const alice = await connect('alice')
     const room = await alice.createRoom({ type: 'group' })
     const msg = await alice.sendMessage({ roomId: room.id, content: 'v1' })
     await alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'v2' })
     await alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'v3' })
-    expect(calls).toEqual([['v2', 'v1'], ['v3', 'v2']])
+    expect(calls).toEqual([
+      ['v2', 'v1'],
+      ['v3', 'v2'],
+    ])
   })
 
   it.each([
-    ['deleted directly in the database', (messages: Message[]) => { messages.splice(0, 1) }],
-    ['soft-deleted by an adapter that hides deleted messages', (messages: Message[]) => { messages[0].deletedAt = new Date() }],
+    [
+      'deleted directly in the database',
+      (messages: Message[]) => {
+        messages.splice(0, 1)
+      },
+    ],
+    [
+      'soft-deleted by an adapter that hides deleted messages',
+      (messages: Message[]) => {
+        messages[0].deletedAt = new Date()
+      },
+    ],
   ])('treats a message %s as not found, even if it was sent recently', async (_label, remove) => {
     const { store, messages } = memoryStore()
-    const getMessage = store.getMessage!
+    const getMessage = store.getMessage
+    if (!getMessage) throw new Error('Test adapter must implement getMessage')
     store.getMessage = async (id) => {
       const m = await getMessage(id)
-      return m?.deletedAt ? undefined : m // soft-delete adapters filter deleted messages out
+      // soft-delete adapters filter deleted messages out
+      return m?.deletedAt ? undefined : m
     }
     await start({ persistence: store })
     const alice = await connect('alice')
@@ -316,7 +400,9 @@ describe('Review follow-ups', () => {
     const msg = await alice.sendMessage({ roomId: room.id, content: 'gone soon' })
     remove(messages)
     const edits = record(bob, 'message:edited')
-    await expect(alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'ghost' })).rejects.toThrow('Message not found')
+    await expect(
+      alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'ghost' }),
+    ).rejects.toThrow('Message not found')
     await expect(alice.deleteMessage(msg.id, room.id)).rejects.toThrow('Message not found')
     await expect(alice.sendReaction(msg.id, room.id, '👍')).rejects.toThrow('Message not found')
     await sleep(100)
@@ -327,7 +413,8 @@ describe('Review follow-ups', () => {
     /** An adapter whose next getMessage call waits until the test releases it. */
     function gatedStore() {
       const { store } = memoryStore()
-      const getMessage = store.getMessage!
+      const getMessage = store.getMessage
+      if (!getMessage) throw new Error('Test adapter must implement getMessage')
       let gate: { started: () => void; released: Promise<void> } | undefined
       store.getMessage = async (id) => {
         const current = gate
@@ -342,46 +429,73 @@ describe('Review follow-ups', () => {
       const arm = () => {
         let started = () => {}
         let release = () => {}
-        const startedPromise = new Promise<void>((r) => { started = r })
-        gate = { started, released: new Promise<void>((r) => { release = r }) }
+        const startedPromise = new Promise<void>((r) => {
+          started = r
+        })
+        gate = {
+          started,
+          released: new Promise<void>((r) => {
+            release = r
+          }),
+        }
         return { started: startedPromise, release }
       }
       return { store, arm }
     }
 
     it.each([
-      ['edit', (c: ChatClient, roomId: string, id: string) => c.editMessage({ messageId: id, roomId, content: 'after kick' }), 'message:edited'],
-      ['delete', (c: ChatClient, roomId: string, id: string) => c.deleteMessage(id, roomId), 'message:deleted'],
-      ['react', (c: ChatClient, roomId: string, id: string) => c.sendReaction(id, roomId, '👍'), 'message:reaction'],
-    ] as const)('rejects %s when the user is kicked while the lookup is pending', async (_label, act, event) => {
-      const gate = gatedStore()
-      await start({ persistence: gate.store })
-      const alice = await connect('alice')
-      const bob = await connect('bob')
-      const room = await alice.createRoom({ type: 'group', members: ['bob'] })
-      const bobsMsg = await bob.sendMessage({ roomId: room.id, content: 'mine' })
-      const seen = record(alice, event)
+      [
+        'edit',
+        (c: ChatClient, roomId: string, id: string) =>
+          c.editMessage({ messageId: id, roomId, content: 'after kick' }),
+        'message:edited',
+      ],
+      [
+        'delete',
+        (c: ChatClient, roomId: string, id: string) => c.deleteMessage(id, roomId),
+        'message:deleted',
+      ],
+      [
+        'react',
+        (c: ChatClient, roomId: string, id: string) => c.sendReaction(id, roomId, '👍'),
+        'message:reaction',
+      ],
+    ] as const)(
+      'rejects %s when the user is kicked while the lookup is pending',
+      async (_label, act, event) => {
+        const gate = gatedStore()
+        await start({ persistence: gate.store })
+        const alice = await connect('alice')
+        const bob = await connect('bob')
+        const room = await alice.createRoom({ type: 'group', members: ['bob'] })
+        const bobsMsg = await bob.sendMessage({ roomId: room.id, content: 'mine' })
+        const seen = record(alice, event)
 
-      const lookup = gate.arm()
-      const action = act(bob, room.id, bobsMsg.id)
-      await lookup.started
-      server.engine.kickUser(room.id, 'bob')
-      lookup.release()
+        const lookup = gate.arm()
+        const action = act(bob, room.id, bobsMsg.id)
+        await lookup.started
+        server.engine.kickUser(room.id, 'bob')
+        lookup.release()
 
-      await expect(action).rejects.toThrow('Not a member of this room')
-      await sleep(100)
-      expect(seen).toHaveLength(0)
-    })
+        await expect(action).rejects.toThrow('Not a member of this room')
+        await sleep(100)
+        expect(seen).toHaveLength(0)
+      },
+    )
 
     it('rejects a message when the sender is kicked while message middleware is pending', async () => {
       let releaseMiddleware = () => {}
       let middlewareStarted = () => {}
-      const started = new Promise<void>((r) => { middlewareStarted = r })
+      const started = new Promise<void>((r) => {
+        middlewareStarted = r
+      })
       await start({
         messageMiddleware: [
           (_m, _u, next) => {
             middlewareStarted()
-            new Promise<void>((r) => { releaseMiddleware = r }).then(() => next())
+            new Promise<void>((r) => {
+              releaseMiddleware = r
+            }).then(() => next())
           },
         ],
       })

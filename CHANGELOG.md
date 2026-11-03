@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `authenticate` option on `ChatEngine` to verify who is connecting (e.g. from a token or cookie in the handshake).
 - `insecureTrustClientUser` option to trust the client-provided `auth.user` during local development.
+- Optional `moderation` option on `ChatEngine` that blocks abusive messages with Jev (TypeSafe AI), using your own API key. Sent and edited text is screened before it is delivered; blocked requests are rejected with `MESSAGE_BLOCKED`. Includes `failMode`, `threshold`, `policy`, `model`, `detectInjection`, `timeoutMs` and `baseUrl` options and an `onFlagged` callback. Off by default: without it no requests are made. While it is on, edits count towards `rateLimit` and respect mutes and `maxMessageLength`, and messages with bidi override characters are rejected.
+- `ChatRequestError` in `@ravex/client`: request methods now reject with an `Error` subclass that carries the server's error `code` (e.g. `MESSAGE_BLOCKED`, `ROOM_NOT_FOUND`). The message text is unchanged.
 
 ### Security
 - **Breaking:** the server no longer trusts the `auth.user` object sent by the client by default, which let anyone connect as any user. Without `authenticate` every connection is rejected; set `authenticate`, or `insecureTrustClientUser: true` for development only.

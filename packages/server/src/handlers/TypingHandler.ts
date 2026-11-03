@@ -1,4 +1,5 @@
 import type { TypingPayload } from '@ravex/types'
+
 import type { TypedNamespace, TypedSocket } from '../ChatEngine.js'
 import type { RoomManager } from '../core/RoomManager.js'
 import { logger } from '../utils/logger.js'
@@ -147,7 +148,10 @@ export class TypingHandler {
     this.emit('typing:stop', { userId, username: state.username, roomId })
   }
 
-  private emit(event: 'typing:start' | 'typing:stop', data: { userId: string; username: string; roomId: string }): void {
+  private emit(
+    event: 'typing:start' | 'typing:stop',
+    data: { userId: string; username: string; roomId: string },
+  ): void {
     // Exclude every socket of the typing user, not just the one that sent the event.
     this.ns.to(data.roomId).except(userRoom(data.userId)).emit(event, data)
   }

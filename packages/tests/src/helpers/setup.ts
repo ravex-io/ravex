@@ -1,8 +1,9 @@
 import { createServer as createHttpServer, type Server as HttpServer } from 'http'
-import { ChatEngine, type ChatEngineOptions } from '@ravex/server'
+import type { AddressInfo } from 'net'
+
 import { ChatClient, type ChatClientOptions } from '@ravex/client'
+import { ChatEngine, type ChatEngineOptions } from '@ravex/server'
 import type { User } from '@ravex/types'
-import { AddressInfo } from 'net'
 
 export interface TestServer {
   httpServer: HttpServer
@@ -34,24 +35,32 @@ export async function createServer(options?: ChatEngineOptions): Promise<TestSer
   return { httpServer, engine, port, close }
 }
 
-export function createClient(port: number, user: User, options?: Partial<ChatClientOptions>): ChatClient {
+export function createClient(
+  port: number,
+  user: User,
+  options?: Partial<ChatClientOptions>,
+): ChatClient {
   return new ChatClient({
     url: `http://localhost:${port}`,
     auth: { user },
-    ...options
+    ...options,
   })
 }
 
-export async function createConnectedClient(port: number, user: User, options?: Partial<ChatClientOptions>): Promise<ChatClient> {
+export async function createConnectedClient(
+  port: number,
+  user: User,
+  options?: Partial<ChatClientOptions>,
+): Promise<ChatClient> {
   const client = createClient(port, user, options)
   client.connect()
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Client connection timeout')), 5000)
-    client.on('connect', () => {
+    client.rawSocket.on('connect', () => {
       clearTimeout(timeout)
       resolve()
     })
-    client.on('connect_error', (err) => {
+    client.rawSocket.on('connect_error', (err) => {
       clearTimeout(timeout)
       reject(err)
     })

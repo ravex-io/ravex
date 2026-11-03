@@ -1,8 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import type { ChatClient } from '@ravex/client'
 import type { ChatEngineOptions } from '@ravex/server'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import { mkUser, record, sleep, waitFor } from './helpers/events.js'
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Typing Indicators: edge cases', () => {
   let server: TestServer
@@ -47,6 +48,7 @@ describe('Typing Indicators: edge cases', () => {
     const stops = record(b, 'typing:stop')
     for (let i = 0; i < 10; i++) {
       a.startTyping(roomId)
+      // eslint-disable-next-line no-await-in-loop -- Simulate typing over time.
       await sleep(100)
     }
     expect(stops).toHaveLength(0)
@@ -81,7 +83,7 @@ describe('Typing Indicators: edge cases', () => {
 
   // ── Regressions ───────────────────────────────────────────────────────────
 
-  it('sending a message should clear the sender\'s typing indicator', async () => {
+  it("sending a message should clear the sender's typing indicator", async () => {
     const { a, b, roomId } = await setup({ typing: { typingTimeout: 3000 } })
     a.startTyping(roomId)
     await waitFor(b, 'typing:start')
@@ -108,7 +110,7 @@ describe('Typing Indicators: edge cases', () => {
     expect(stops).toHaveLength(0)
   })
 
-  it('the typer\'s other tabs should not see their own typing indicator', async () => {
+  it("the typer's other tabs should not see their own typing indicator", async () => {
     const { a, roomId } = await setup()
     const aliceTab2 = await connect('alice')
     const starts = record(aliceTab2, 'typing:start')
@@ -119,7 +121,8 @@ describe('Typing Indicators: edge cases', () => {
 
   it('closing the tab that was typing should clear typing even if another tab stays open', async () => {
     const { a, b, roomId } = await setup({ typing: { typingTimeout: 3000 } })
-    await connect('alice') // second tab stays connected
+    // second tab stays connected
+    await connect('alice')
     a.startTyping(roomId)
     await waitFor(b, 'typing:start')
     const p = waitFor(b, 'typing:stop', 500)
@@ -176,11 +179,14 @@ describe('Typing Indicators: edge cases', () => {
     it('stops only when the last active tab times out', async () => {
       const { tabB, roomId, stops } = await twoTabsTyping(600)
       // tab A started at t=0 and times out at ~600ms; tab B started at ~350ms, times out at ~950ms
-      await sleep(400) // now ~800ms
+      // now ~800ms
+      await sleep(400)
       expect(stops).toHaveLength(0)
-      await sleep(350) // now ~1150ms
+      // now ~1150ms
+      await sleep(350)
       expect(stops).toMatchObject([{ userId: 'alice', roomId }])
       tabB.disconnect()
+      // eslint-disable-next-line no-await-in-loop -- Simulate typing over time.
       await sleep(100)
       expect(stops).toHaveLength(1)
     })
@@ -211,7 +217,7 @@ describe('Typing Indicators: edge cases', () => {
     await expect(p).resolves.toMatchObject({ userId: 'org:alice', roomId })
   })
 
-  it('one user disconnecting must not cancel another user\'s typing timer (prefix collision)', async () => {
+  it("one user disconnecting must not cancel another user's typing timer (prefix collision)", async () => {
     const { a, b, roomId } = await setup({ typing: { typingTimeout: 300 } }, 'team', 'bob')
     const team2 = await connect('team:2')
     await team2.joinRoom(roomId)

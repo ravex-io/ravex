@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
-import type { User, Message } from '@ravex/types'
+import type { User, Message, ServerToClientEvents } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Messaging', () => {
   let server: TestServer
@@ -14,7 +15,7 @@ describe('Messaging', () => {
 
   beforeEach(async () => {
     server = await createServer({
-      message: { allowEdits: true, allowDeletes: true }
+      message: { allowEdits: true, allowDeletes: true },
     })
     clientA = await createConnectedClient(server.port, userA)
     clientB = await createConnectedClient(server.port, userB)
@@ -22,7 +23,7 @@ describe('Messaging', () => {
     // Create a room and join both
     const room = await clientA.createRoom({ type: 'group', name: 'Test Room', members: [userB.id] })
     roomId = room.id
-    
+
     // Client B must explicitly join to receive messages
     await clientB.joinRoom(roomId)
   })
@@ -53,13 +54,15 @@ describe('Messaging', () => {
 
   it('should edit a message', async () => {
     const sentMessage = await clientA.sendMessage({ roomId, content: 'Original' })
-    
-    const editPromise = new Promise<any>((resolve) => {
-      clientB.onMessageEdited((data) => resolve(data))
-    })
+
+    const editPromise = new Promise<Parameters<ServerToClientEvents['message:edited']>[0]>(
+      (resolve) => {
+        clientB.onMessageEdited((data) => resolve(data))
+      },
+    )
 
     await clientA.editMessage({ messageId: sentMessage.id, roomId, content: 'Edited' })
-    
+
     const editData = await editPromise
     expect(editData.messageId).toBe(sentMessage.id)
     expect(editData.content).toBe('Edited')
@@ -67,13 +70,15 @@ describe('Messaging', () => {
 
   it('should delete a message', async () => {
     const sentMessage = await clientA.sendMessage({ roomId, content: 'To be deleted' })
-    
-    const deletePromise = new Promise<any>((resolve) => {
-      clientB.onMessageDeleted((data) => resolve(data))
-    })
+
+    const deletePromise = new Promise<Parameters<ServerToClientEvents['message:deleted']>[0]>(
+      (resolve) => {
+        clientB.onMessageDeleted((data) => resolve(data))
+      },
+    )
 
     await clientA.deleteMessage(sentMessage.id, roomId)
-    
+
     const deleteData = await deletePromise
     expect(deleteData.messageId).toBe(sentMessage.id)
   })
@@ -81,9 +86,11 @@ describe('Messaging', () => {
   it('should send a read receipt', async () => {
     const sentMessage = await clientA.sendMessage({ roomId, content: 'Read me' })
 
-    const readPromise = new Promise<any>((resolve) => {
-      clientA.onReadReceipt((data) => resolve(data))
-    })
+    const readPromise = new Promise<Parameters<ServerToClientEvents['message:read_receipt']>[0]>(
+      (resolve) => {
+        clientA.onReadReceipt((data) => resolve(data))
+      },
+    )
 
     clientB.markAsRead(sentMessage.id, roomId)
 
@@ -95,9 +102,11 @@ describe('Messaging', () => {
   it('should send a reaction', async () => {
     const sentMessage = await clientA.sendMessage({ roomId, content: 'React to me' })
 
-    const reactPromise = new Promise<any>((resolve) => {
-      clientA.onReaction((data) => resolve(data))
-    })
+    const reactPromise = new Promise<Parameters<ServerToClientEvents['message:reaction']>[0]>(
+      (resolve) => {
+        clientA.onReaction((data) => resolve(data))
+      },
+    )
 
     await clientB.sendReaction(sentMessage.id, roomId, '👍')
 

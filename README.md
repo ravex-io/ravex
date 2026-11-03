@@ -50,6 +50,9 @@ pnpm build
 The project uses `vitest` for end-to-end integration testing. Tests instantiate real HTTP servers and real Socket.IO clients to verify true behavior.
 
 ```bash
+# Run every pre-push check (build, typecheck, lint, formatting, tests)
+pnpm check
+
 # Run the test suite
 pnpm test
 
@@ -72,7 +75,7 @@ pnpm format
 ## Contributing
 
 We welcome contributions! Please follow these steps:
-1. Ensure all code passes strict TypeScript compilation (`pnpm build`).
+1. Ensure source and tests pass all checks (`pnpm check`).
 2. Add or update integration tests in `packages/tests` if adding new functionality.
 3. Ensure the test suite passes (`pnpm test`).
 4. Keep the codebase completely free of `any` types.

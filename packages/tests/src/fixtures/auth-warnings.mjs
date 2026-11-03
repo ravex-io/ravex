@@ -1,6 +1,7 @@
 // Creates two ChatEngines with the auth options given as JSON in argv[2], in a fresh process,
 // so the once-per-process startup warning can be counted on stderr.
 import { createServer } from 'http'
+
 import { ChatEngine } from '@ravex/server'
 
 const options = JSON.parse(process.argv[2] ?? '{}')

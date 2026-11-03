@@ -1,11 +1,15 @@
-import { describe, it, expect, afterEach } from 'vitest'
 import type { ChatClient } from '@ravex/client'
 import type { ChatEngineOptions } from '@ravex/server'
 import type { Message, User } from '@ravex/types'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 const mkUser = (id: string): User => ({ id, username: id, status: 'online', socketIds: [] })
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 let server: TestServer
 const clients: ChatClient[] = []
@@ -30,7 +34,7 @@ afterEach(async () => {
 })
 
 describe('Multi-tab room membership', () => {
-  it('joining from one tab subscribes all of the user\'s tabs', async () => {
+  it("joining from one tab subscribes all of the user's tabs", async () => {
     await start()
     const alice = await connect('alice')
     const bobTab1 = await connect('bob')
@@ -45,7 +49,7 @@ describe('Multi-tab room membership', () => {
     expect(tab2).toHaveLength(1)
   })
 
-  it('leaving from one tab unsubscribes all of the user\'s tabs', async () => {
+  it("leaving from one tab unsubscribes all of the user's tabs", async () => {
     await start()
     const alice = await connect('alice')
     const bobTab1 = await connect('bob')
@@ -75,7 +79,7 @@ describe('Multi-tab room membership', () => {
     expect(bobGot).toHaveLength(0)
   })
 
-  it('a tab opened later is subscribed to the user\'s rooms', async () => {
+  it("a tab opened later is subscribed to the user's rooms", async () => {
     await start()
     const alice = await connect('alice')
     const bob = await connect('bob')
@@ -183,7 +187,7 @@ describe('Presence status hook on disconnect/reconnect', () => {
     expect(calls).toEqual([])
   })
 
-  it('does not invoke onStatusChange for a user\'s first connection', async () => {
+  it("does not invoke onStatusChange for a user's first connection", async () => {
     const calls = await startWithHook()
     await connect('bob')
     await sleep(50)
@@ -200,9 +204,13 @@ describe('Rate limiter quota', () => {
     await alice.sendMessage({ roomId: room.id, content: '2' })
     await sleep(200)
     for (let i = 0; i < 5; i++) {
-      await expect(alice.sendMessage({ roomId: room.id, content: 'spam' })).rejects.toThrow('Rate limit exceeded')
+      // eslint-disable-next-line no-await-in-loop -- Each request depends on the previous attempt.
+      await expect(alice.sendMessage({ roomId: room.id, content: 'spam' })).rejects.toThrow(
+        'Rate limit exceeded',
+      )
     }
-    await sleep(250) // the two accepted messages are now outside the window
+    // the two accepted messages are now outside the window
+    await sleep(250)
     await expect(alice.sendMessage({ roomId: room.id, content: 'ok again' })).resolves.toBeTruthy()
   })
 
@@ -210,8 +218,12 @@ describe('Rate limiter quota', () => {
     await start({ rateLimit: { maxMessages: 3, windowMs: 60_000 } })
     const alice = await connect('alice')
     const room = await alice.createRoom({ type: 'group' })
-    for (let i = 0; i < 3; i++) await alice.sendMessage({ roomId: room.id, content: `${i}` })
-    await expect(alice.sendMessage({ roomId: room.id, content: '4th' })).rejects.toThrow('Rate limit exceeded')
+    await Promise.all(
+      Array.from({ length: 3 }, (_, i) => alice.sendMessage({ roomId: room.id, content: `${i}` })),
+    )
+    await expect(alice.sendMessage({ roomId: room.id, content: '4th' })).rejects.toThrow(
+      'Rate limit exceeded',
+    )
   })
 
   it('does not use up quota while the user is muted', async () => {
@@ -219,10 +231,15 @@ describe('Rate limiter quota', () => {
     const alice = await connect('alice')
     const room = await alice.createRoom({ type: 'group' })
     // There is no public mute API yet, so reach the engine's rate limiter directly.
-    const limiter = (server.engine as unknown as { rateLimiter: { mute(u: string, r: string, ms: number): void } }).rateLimiter
+    const limiter = (
+      server.engine as unknown as { rateLimiter: { mute(u: string, r: string, ms: number): void } }
+    ).rateLimiter
     limiter.mute('alice', room.id, 150)
     for (let i = 0; i < 3; i++) {
-      await expect(alice.sendMessage({ roomId: room.id, content: 'muted' })).rejects.toThrow('You are muted in this room')
+      // eslint-disable-next-line no-await-in-loop -- Each request depends on the previous attempt.
+      await expect(alice.sendMessage({ roomId: room.id, content: 'muted' })).rejects.toThrow(
+        'You are muted in this room',
+      )
     }
     await sleep(200)
     await expect(alice.sendMessage({ roomId: room.id, content: '1' })).resolves.toBeTruthy()

@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
 import type { User } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Errors & Edge Cases', () => {
   let server: TestServer
@@ -22,28 +23,31 @@ describe('Errors & Edge Cases', () => {
 
   it('should reject messages with empty content and no attachments', async () => {
     const room = await clientA.createRoom({ type: 'group', name: 'Test Room' })
-    
-    await expect(clientA.sendMessage({ roomId: room.id, content: '' }))
-      .rejects.toThrow('content or attachments required')
+
+    await expect(clientA.sendMessage({ roomId: room.id, content: '' })).rejects.toThrow(
+      'content or attachments required',
+    )
   })
 
   it('should reject messages exceeding max length', async () => {
     const room = await clientA.createRoom({ type: 'group', name: 'Test Room' })
-    
-    await expect(clientA.sendMessage({ roomId: room.id, content: 'This message is way too long' }))
-      .rejects.toThrow('Message too long')
+
+    await expect(
+      clientA.sendMessage({ roomId: room.id, content: 'This message is way too long' }),
+    ).rejects.toThrow('Message too long')
   })
 
   it('should reject sending messages to a room the user is not in', async () => {
-    await expect(clientA.sendMessage({ roomId: 'non-existent-room', content: 'Hello' }))
-      .rejects.toThrow('Room not found')
+    await expect(
+      clientA.sendMessage({ roomId: 'non-existent-room', content: 'Hello' }),
+    ).rejects.toThrow('Room not found')
   })
 
   it('should reject editing another users message', async () => {
     // Create another user and room
     const userB: User = { id: 'user-b', username: 'userb', status: 'online', socketIds: [] }
     const clientB = await createConnectedClient(server.port, userB)
-    
+
     const room = await clientB.createRoom({ type: 'group', name: 'B Room', members: [userA.id] })
     await clientA.joinRoom(room.id)
 
@@ -51,8 +55,9 @@ describe('Errors & Edge Cases', () => {
     const msg = await clientB.sendMessage({ roomId: room.id, content: 'B message' })
 
     // A tries to edit B's message (ownership is checked even without a persistence adapter)
-    await expect(clientA.editMessage({ messageId: msg.id, roomId: room.id, content: 'forged' }))
-      .rejects.toThrow("Cannot edit another user's message")
+    await expect(
+      clientA.editMessage({ messageId: msg.id, roomId: room.id, content: 'forged' }),
+    ).rejects.toThrow("Cannot edit another user's message")
 
     clientB.disconnect()
   })

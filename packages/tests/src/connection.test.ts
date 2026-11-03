@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
 import type { User } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createClient, type TestServer } from './helpers/setup.js'
 
 describe('Connection', () => {
   let server: TestServer
@@ -12,7 +13,7 @@ describe('Connection', () => {
     username: 'testuser',
     displayName: 'Test User',
     status: 'online',
-    socketIds: []
+    socketIds: [],
   }
 
   beforeEach(async () => {
@@ -26,10 +27,10 @@ describe('Connection', () => {
 
   it('should connect successfully with valid auth', async () => {
     client = createClient(server.port, mockUser)
-    
+
     await new Promise<void>((resolve, reject) => {
-      client.on('connect', () => resolve())
-      client.on('connect_error', (err) => reject(err))
+      client.rawSocket.on('connect', () => resolve())
+      client.rawSocket.on('connect_error', (err) => reject(err))
       client.connect()
     })
 
@@ -39,27 +40,29 @@ describe('Connection', () => {
   it('should fail connection with missing auth', async () => {
     // @ts-expect-error - testing invalid auth
     client = createClient(server.port, undefined)
-    
-    await expect(new Promise<void>((resolve, reject) => {
-      client.on('connect', () => resolve())
-      client.on('connect_error', (err) => reject(err))
-      client.connect()
-    })).rejects.toThrow('Authentication failed')
+
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        client.rawSocket.on('connect', () => resolve())
+        client.rawSocket.on('connect_error', (err) => reject(err))
+        client.connect()
+      }),
+    ).rejects.toThrow('Authentication failed')
   })
 
   it('should disconnect cleanly', async () => {
     client = createClient(server.port, mockUser)
-    
+
     await new Promise<void>((resolve, reject) => {
-      client.on('connect', () => resolve())
-      client.on('connect_error', (err) => reject(err))
+      client.rawSocket.on('connect', () => resolve())
+      client.rawSocket.on('connect_error', (err) => reject(err))
       client.connect()
     })
 
     expect(client.isConnected).toBe(true)
 
     const disconnectPromise = new Promise<void>((resolve) => {
-      client.on('disconnect', () => resolve())
+      client.rawSocket.on('disconnect', () => resolve())
     })
 
     client.disconnect()
