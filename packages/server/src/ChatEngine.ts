@@ -1,7 +1,7 @@
-import { Server, type Namespace, type ServerOptions } from 'socket.io'
 import type { Server as HttpServer } from 'http'
-import type { Server as HttpsServer } from 'https'
 import type { Http2SecureServer, Http2Server } from 'http2'
+import type { Server as HttpsServer } from 'https'
+
 import type {
   User,
   Room,
@@ -15,23 +15,37 @@ import type {
   ServerToClientEvents,
   AckResponse,
 } from '@ravex/types'
+import { Server, type Namespace, type ServerOptions } from 'socket.io'
+
 import { RoomManager, type CreateRoomOptions } from './core/RoomManager.js'
 import { UserManager } from './core/UserManager.js'
-import { RateLimiter, type RateLimitConfig } from './middleware/RateLimiter.js'
-import { validateEvents, safeListener, guardCallbacks } from './middleware/EventGuard.js'
 import { MessageHandler, type MessageHandlerConfig } from './handlers/MessageHandler.js'
-import { TypingHandler, userRoom, type TypingConfig } from './handlers/TypingHandler.js'
 import { PresenceHandler, type PresenceConfig } from './handlers/PresenceHandler.js'
-import { ChatError, ErrorCodes } from './utils/errors.js'
-import { resolveUser, warnAuthConfig, AUTH_FAILED_MESSAGE, type Authenticate, type AuthOptions } from './middleware/Auth.js'
+import { TypingHandler, userRoom, type TypingConfig } from './handlers/TypingHandler.js'
+import {
+  resolveUser,
+  warnAuthConfig,
+  AUTH_FAILED_MESSAGE,
+  type Authenticate,
+  type AuthOptions,
+} from './middleware/Auth.js'
+import { validateEvents, safeListener, guardCallbacks } from './middleware/EventGuard.js'
+import { Moderator, type ModerationFlag, type ModerationOptions } from './middleware/Moderation.js'
+import { RateLimiter, type RateLimitConfig } from './middleware/RateLimiter.js'
 import { RecoveryGuard } from './middleware/Recovery.js'
+import { ChatError, ErrorCodes } from './utils/errors.js'
 import { logger } from './utils/logger.js'
 
 export interface SocketData {
   user: User
 }
 
-export type TypedNamespace = Namespace<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>
+export type TypedNamespace = Namespace<
+  ClientToServerEvents,
+  ServerToClientEvents,
+  Record<string, never>,
+  SocketData
+>
 export type TypedSocket = Parameters<Parameters<TypedNamespace['on']>[1]>[0]
 export type AckFn<T> = (response: AckResponse<T>) => void
 /** Internal: the error-only ack shape. Every AckFn<T> is structurally assignable to this. */
@@ -52,7 +66,7 @@ export interface PersistenceAdapter {
 export type MessageMiddleware = (
   message: Message,
   user: User,
-  next: (err?: Error) => void
+  next: (err?: Error) => void,
 ) => void | Promise<void>
 
 export type HttpServerInstance = HttpServer | HttpsServer | Http2SecureServer | Http2Server
@@ -84,6 +98,11 @@ export interface ChatEngineOptions {
   typing?: TypingConfig
   presence?: PresenceConfig
   rateLimit?: RateLimitConfig
+  /**
+   * Blocks abusive messages with Jev (TypeSafe AI), using your own API key. Off when omitted: no requests are made.
+   * When set, the text of every sent and edited message is sent to Jev and checked before it is delivered or saved.
+   */
+  moderation?: ModerationOptions
   // Application callbacks may be sync or async. Errors they throw or reject with are logged and never crash the server.
   onMessage?: (message: Message) => void | Promise<void>
   onEdit?: (message: Message, previousContent: string) => void | Promise<void>
@@ -91,6 +110,8 @@ export interface ChatEngineOptions {
   onRead?: (userId: string, messageId: string, roomId: string) => void | Promise<void>
   onReaction?: (reaction: ReactPayload, message: Message) => void | Promise<void>
   onStatusChange?: (userId: string, previousStatus: UserStatus) => void | Promise<void>
+  /** Called when `moderation` blocks a sent or edited message (for edits, `message.content` is the rejected text). */
+  onFlagged?: (message: Message, flag: ModerationFlag) => void | Promise<void>
 }
 
 export class ChatEngine {
@@ -105,6 +126,7 @@ export class ChatEngine {
   private readonly persistence?: PersistenceAdapter
   private readonly middleware: MessageMiddleware[]
   private readonly auth: AuthOptions
+  private readonly moderator?: Moderator
 
   /**
    * @param srv - An HTTP/HTTPS/HTTP2 server, a port number to listen on, or
@@ -114,12 +136,20 @@ export class ChatEngine {
    */
   constructor(srv: HttpServerInstance | number | Server, options: ChatEngineOptions = {}) {
     options = guardCallbacks(options)
-    this.server = srv instanceof Server ? srv : new Server(srv as HttpServerInstance, options.socket)
+    // Built first, so invalid moderation options throw before a socket.io server or timer exists.
+    this.moderator = options.moderation
+      ? new Moderator(options.moderation, options.onFlagged ?? (() => {}))
+      : undefined
+    this.server =
+      srv instanceof Server ? srv : new Server(srv as HttpServerInstance, options.socket)
     const nsPath = options.namespace ?? '/'
     this.ns = this.server.of(nsPath) as TypedNamespace
     this.persistence = options.persistence
     this.middleware = options.messageMiddleware ?? []
-    this.auth = { authenticate: options.authenticate, insecureTrustClientUser: options.insecureTrustClientUser }
+    this.auth = {
+      authenticate: options.authenticate,
+      insecureTrustClientUser: options.insecureTrustClientUser,
+    }
     warnAuthConfig(this.auth)
     this.rateLimiter = new RateLimiter(options.rateLimit)
     this.messageHandler = new MessageHandler({
@@ -129,7 +159,9 @@ export class ChatEngine {
       config: options.message ?? {},
       persistence: this.persistence,
       middleware: this.middleware,
-      clearTyping: (socketId, userId, roomId) => this.typingHandler.clearForSocketInRoom(socketId, userId, roomId),
+      moderator: this.moderator,
+      clearTyping: (socketId, userId, roomId) =>
+        this.typingHandler.clearForSocketInRoom(socketId, userId, roomId),
       onMessage: options.onMessage ?? (() => {}),
       onEdit: options.onEdit ?? (() => {}),
       onDelete: options.onDelete ?? (() => {}),
@@ -171,7 +203,10 @@ export class ChatEngine {
 
       // Malformed events from a client must never take the server down.
       validateEvents(socket)
-      const on = <E extends keyof ClientToServerEvents>(event: E, listener: ClientToServerEvents[E]): void => {
+      const on = <E extends keyof ClientToServerEvents>(
+        event: E,
+        listener: ClientToServerEvents[E],
+      ): void => {
         ;(socket as { on(e: string, l: (...args: unknown[]) => void): void }).on(
           event,
           safeListener(event, listener as (...args: unknown[]) => unknown),
@@ -198,7 +233,11 @@ export class ChatEngine {
   }
 
   /** Namespace middleware: resolves the user for a new or recovered connection, or rejects it. */
-  private authenticateSocket(recovery: RecoveryGuard, socket: TypedSocket, next: (err?: Error) => void): void {
+  private authenticateSocket(
+    recovery: RecoveryGuard,
+    socket: TypedSocket,
+    next: (err?: Error) => void,
+  ): void {
     // A recovered socket comes back with the previous socket.data; remember who it belonged to.
     const previousUserId = socket.recovered ? socket.data.user?.id : undefined
     resolveUser(socket.handshake, this.auth).then(
@@ -208,7 +247,9 @@ export class ChatEngine {
           return next(new Error(AUTH_FAILED_MESSAGE))
         }
         socket.data.user = user
-        recovery.accept(socket, previousUserId === user.id, (roomId) => this.roomManager.isMember(roomId, user.id))
+        recovery.accept(socket, previousUserId === user.id, (roomId) =>
+          this.roomManager.isMember(roomId, user.id),
+        )
         next()
       },
       (err: unknown) => {
@@ -339,13 +380,18 @@ export class ChatEngine {
     }
   }
 
-  private handleRoomMembers(socket: TypedSocket, data: { roomId: string }, ack: AckFn<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>): void {
+  private handleRoomMembers(
+    socket: TypedSocket,
+    data: { roomId: string },
+    ack: AckFn<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>,
+  ): void {
     try {
       const user = socket.data.user
       const { roomId } = data
       const room = this.roomManager.get(roomId)
       if (!room) throw new ChatError('Room not found', ErrorCodes.ROOM_NOT_FOUND)
-      if (!room.members.includes(user.id)) throw new ChatError('Not a member', ErrorCodes.UNAUTHORIZED)
+      if (!room.members.includes(user.id))
+        throw new ChatError('Not a member', ErrorCodes.UNAUTHORIZED)
       const list = room.members.map((id) => {
         const u = this.userManager.get(id)
         return u
@@ -431,5 +477,6 @@ export class ChatEngine {
     this.rateLimiter.destroy()
     this.presenceHandler.destroy()
     this.typingHandler.destroy()
+    this.moderator?.destroy()
   }
 }

@@ -20,7 +20,7 @@ export class UserManager {
   }
 
   getOnline(): User[] {
-    return this.getAll().filter(u => u.status === 'online')
+    return this.getAll().filter((u) => u.status === 'online')
   }
 
   isConnected(userId: string): boolean {
@@ -28,7 +28,10 @@ export class UserManager {
     return user ? user.socketIds.length > 0 : false
   }
 
-  updateStatus(userId: string, status: UserStatus): { user: User; previousStatus: UserStatus } | null {
+  updateStatus(
+    userId: string,
+    status: UserStatus,
+  ): { user: User; previousStatus: UserStatus } | null {
     const user = this.get(userId)
     if (!user) return null
 
@@ -52,7 +55,7 @@ export class UserManager {
   removeSocketId(userId: string, socketId: string): void {
     const user = this.get(userId)
     if (!user) return
-    user.socketIds = user.socketIds.filter(id => id !== socketId)
+    user.socketIds = user.socketIds.filter((id) => id !== socketId)
     this.set(userId, user)
   }
 }

@@ -9,11 +9,13 @@ export const ErrorCodes = {
   MESSAGE_TOO_LONG: 'MESSAGE_TOO_LONG',
   RATE_LIMIT: 'RATE_LIMIT_EXCEEDED',
   MUTED: 'USER_MUTED',
+  MESSAGE_BLOCKED: 'MESSAGE_BLOCKED',
+  MODERATION_UNAVAILABLE: 'MODERATION_UNAVAILABLE',
   INTERNAL: 'INTERNAL_ERROR',
   SOCKET_ERROR: 'SOCKET_ERROR',
 } as const
 
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes]
+export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]
 
 export class ChatError extends Error {
   readonly code: ErrorCode

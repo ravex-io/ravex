@@ -29,7 +29,7 @@ export class RateLimiter {
     const now = Date.now()
     const cutoff = now - this.window
 
-    const timestamps = (this.windows.get(userId) ?? []).filter(t => t > cutoff)
+    const timestamps = (this.windows.get(userId) ?? []).filter((t) => t > cutoff)
     // Only accepted messages use up the quota, so retrying while limited doesn't extend the block.
     const allowed = timestamps.length < this.max
     if (allowed) timestamps.push(now)
@@ -65,7 +65,7 @@ export class RateLimiter {
     }
 
     for (const [userId, timestamps] of this.windows) {
-      const filtered = timestamps.filter(t => t > cutoff)
+      const filtered = timestamps.filter((t) => t > cutoff)
       if (filtered.length === 0) this.windows.delete(userId)
       else this.windows.set(userId, filtered)
     }

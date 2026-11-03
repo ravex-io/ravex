@@ -41,5 +41,17 @@
     "prefer-destructuring": "off",
     "typescript/parameter-properties": "off"
   },
+  "overrides": [
+    {
+      "files": ["packages/tests/src/**"],
+      "rules": {
+        "no-magic-numbers": "off",
+        "max-lines-per-function": "off",
+        "init-declarations": "off",
+        "func-style": "off",
+        "require-await": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["dist/", "node_modules/", "*.config.*", "*.d.ts"]
 }

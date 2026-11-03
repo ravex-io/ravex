@@ -1,11 +1,15 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { ChatClient, type ChatClientOptions } from '@ravex/client'
+import { ChatClient, ChatRequestError, type ChatClientOptions } from '@ravex/client'
 import type { ChatEngineOptions, PersistenceAdapter } from '@ravex/server'
 import type { Message, User } from '@ravex/types'
+import { describe, it, expect, afterEach } from 'vitest'
+
 import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 const mkUser = (id: string): User => ({ id, username: id, status: 'online', socketIds: [] })
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 
 let server: TestServer
 const clients: ChatClient[] = []
@@ -24,8 +28,14 @@ function connectRaw(options: ChatClientOptions): Promise<ChatClient> {
   clients.push(client)
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('never connected')), 2000)
-    client.on('connect', () => { clearTimeout(timer); resolve(client) })
-    client.on('connect_error', (err) => { clearTimeout(timer); reject(err) })
+    client.rawSocket.on('connect', () => {
+      clearTimeout(timer)
+      resolve(client)
+    })
+    client.rawSocket.on('connect_error', (err) => {
+      clearTimeout(timer)
+      reject(err)
+    })
   })
 }
 
@@ -61,7 +71,9 @@ describe('Client auth as a function', () => {
 
   it('fails with connect_error when the auth function rejects', async () => {
     await start()
-    await expect(connectRaw({ auth: () => Promise.reject(new Error('refresh failed')) })).rejects.toThrow('Authentication failed')
+    await expect(
+      connectRaw({ auth: () => Promise.reject(new Error('refresh failed')) }),
+    ).rejects.toThrow('Authentication failed')
   })
 
   it('calls the auth function again on reconnect (e.g. to refresh a token)', async () => {
@@ -73,8 +85,11 @@ describe('Client auth as a function', () => {
         return { user: mkUser('alice') }
       },
     })
-    const reconnected = new Promise<void>((resolve) => client.rawSocket.io.once('reconnect', () => resolve()))
-    client.rawSocket.io.engine.close() // simulate a dropped connection
+    const reconnected = new Promise<void>((resolve) => {
+      client.rawSocket.io.once('reconnect', () => resolve())
+    })
+    // simulate a dropped connection
+    client.rawSocket.io.engine.close()
     await reconnected
     expect(calls).toBe(2)
   })
@@ -84,8 +99,13 @@ describe('Client date fields', () => {
   function memoryStore(): PersistenceAdapter {
     const messages: Message[] = []
     return {
-      async saveMessage(m) { messages.push(JSON.parse(JSON.stringify(m))) }, // stored like a real DB: as strings
-      async getMessages(roomId) { return messages.filter((m) => m.roomId === roomId) },
+      // stored like a real DB: as strings
+      async saveMessage(m) {
+        messages.push(JSON.parse(JSON.stringify(m)))
+      },
+      async getMessages(roomId) {
+        return messages.filter((m) => m.roomId === roomId)
+      },
       async updateMessage() {},
       async deleteMessage() {},
     }
@@ -98,12 +118,24 @@ describe('Client date fields', () => {
     const room = await alice.createRoom({ type: 'group', members: ['bob'] })
 
     const received: Record<string, unknown> = {}
-    bob.onMessage((m) => { received.createdAt = m.createdAt })
-    bob.onMessageEdited((e) => { received.editedAt = e.editedAt })
-    bob.onReaction((e) => { received.reactedAt = e.reactedAt })
-    alice.onReadReceipt((e) => { received.readAt = e.readAt })
-    alice.onUserStatus((e) => { received.statusLastSeen = e.lastSeen })
-    alice.onUserOffline((e) => { received.offlineLastSeen = e.lastSeen })
+    bob.onMessage((m) => {
+      received.createdAt = m.createdAt
+    })
+    bob.onMessageEdited((e) => {
+      received.editedAt = e.editedAt
+    })
+    bob.onReaction((e) => {
+      received.reactedAt = e.reactedAt
+    })
+    alice.onReadReceipt((e) => {
+      received.readAt = e.readAt
+    })
+    alice.onUserStatus((e) => {
+      received.statusLastSeen = e.lastSeen
+    })
+    alice.onUserOffline((e) => {
+      received.offlineLastSeen = e.lastSeen
+    })
 
     const msg = await alice.sendMessage({ roomId: room.id, content: 'hi' })
     await alice.editMessage({ messageId: msg.id, roomId: room.id, content: 'edited' })
@@ -114,7 +146,14 @@ describe('Client date fields', () => {
     bob.disconnect()
     await sleep(100)
 
-    for (const key of ['createdAt', 'editedAt', 'reactedAt', 'readAt', 'statusLastSeen', 'offlineLastSeen']) {
+    for (const key of [
+      'createdAt',
+      'editedAt',
+      'reactedAt',
+      'readAt',
+      'statusLastSeen',
+      'offlineLastSeen',
+    ]) {
       expect(received[key], key).toBeInstanceOf(Date)
     }
     expect((received.createdAt as Date).getTime()).toBe(new Date(msg.createdAt).getTime())
@@ -139,7 +178,11 @@ describe('Client date fields', () => {
     await start()
     const alice = await connect('alice')
     const room = await alice.createRoom({ type: 'group' })
-    const msg = await alice.sendMessage({ roomId: room.id, content: 'hi', metadata: { createdAt: '2020-01-01T00:00:00.000Z' } })
+    const msg = await alice.sendMessage({
+      roomId: room.id,
+      content: 'hi',
+      metadata: { createdAt: '2020-01-01T00:00:00.000Z' },
+    })
     expect(msg.metadata?.createdAt).toBe('2020-01-01T00:00:00.000Z')
   })
 })
@@ -153,7 +196,9 @@ describe('Client request timeout', () => {
     const alice = await connect('alice', { requestTimeout: 200 })
     const room = await alice.createRoom({ type: 'group' })
     const started = Date.now()
-    await expect(alice.sendMessage({ roomId: room.id, content: 'lost' })).rejects.toThrow('Request "message:send" timed out after 200ms')
+    await expect(alice.sendMessage({ roomId: room.id, content: 'lost' })).rejects.toThrow(
+      'Request "message:send" timed out after 200ms',
+    )
     expect(Date.now() - started).toBeLessThan(1000)
   })
 
@@ -169,7 +214,10 @@ describe('Client request timeout', () => {
     const alice = await connect('alice', { requestTimeout: 0 })
     const room = await alice.createRoom({ type: 'group' })
     const result = await Promise.race([
-      alice.sendMessage({ roomId: room.id, content: 'waits' }).then(() => 'answered', () => 'rejected'),
+      alice.sendMessage({ roomId: room.id, content: 'waits' }).then(
+        () => 'answered',
+        () => 'rejected',
+      ),
       sleep(400).then(() => 'still pending'),
     ])
     expect(result).toBe('still pending')
@@ -179,7 +227,27 @@ describe('Client request timeout', () => {
     await start()
     const alice = await connect('alice', { requestTimeout: 200 })
     const room = await alice.createRoom({ type: 'group' })
-    await expect(alice.sendMessage({ roomId: room.id, content: 'fine' })).resolves.toMatchObject({ content: 'fine' })
+    await expect(alice.sendMessage({ roomId: room.id, content: 'fine' })).resolves.toMatchObject({
+      content: 'fine',
+    })
     await expect(alice.joinRoom('missing')).rejects.toThrow('Room not found')
+  })
+})
+
+describe('Client request errors', () => {
+  it('rejects with a ChatRequestError carrying the server error code', async () => {
+    await start()
+    const alice = await connect('alice')
+    const err = await alice.joinRoom('missing').then(
+      () => undefined,
+      (e: unknown) => e,
+    )
+    expect(err).toBeInstanceOf(ChatRequestError)
+    expect(err).toBeInstanceOf(Error)
+    expect(err).toMatchObject({
+      name: 'ChatRequestError',
+      code: 'ROOM_NOT_FOUND',
+      message: 'Room not found',
+    })
   })
 })

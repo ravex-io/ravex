@@ -85,8 +85,7 @@ jobs:
           node-version: 24
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test
+      - run: pnpm check
 
   # Kept apart from `check` so the test suite never runs with permission to publish.
   publish:

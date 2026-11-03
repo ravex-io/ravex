@@ -1,4 +1,3 @@
-import { io, type Socket } from 'socket.io-client'
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -16,6 +15,9 @@ import type {
   User,
   AckResponse,
 } from '@ravex/types'
+import { io, type Socket } from 'socket.io-client'
+
+import { ChatRequestError } from './errors.js'
 
 const DEFAULT_HISTORY_LIMIT = 50
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000
@@ -36,7 +38,15 @@ export interface ChatClientOptions {
 }
 
 // Fields the server sends as Dates; JSON turns them into ISO strings on the wire.
-const DATE_FIELDS = new Set(['createdAt', 'editedAt', 'deletedAt', 'readAt', 'reactedAt', 'lastSeen', 'connectedAt'])
+const DATE_FIELDS = new Set([
+  'createdAt',
+  'editedAt',
+  'deletedAt',
+  'readAt',
+  'reactedAt',
+  'lastSeen',
+  'connectedAt',
+])
 
 /**
  * Turns the ISO date strings of known date fields back into `Date` objects, in place, so the
@@ -63,14 +73,19 @@ const reviveDates = (value: unknown): void => {
  * socket.io-client calls a function `auth` as `auth(cb)` and waits for `cb`; it ignores a returned
  * value or Promise. Adapt `() => payload | Promise<payload>` to that callback style.
  */
-const toSocketAuth = (auth: AuthOption | undefined): AuthPayload | ((cb: (data: object) => void) => void) | undefined => {
+const toSocketAuth = (
+  auth: AuthOption | undefined,
+): AuthPayload | ((cb: (data: object) => void) => void) | undefined => {
   if (typeof auth !== 'function') return auth
   return (cb) => {
     Promise.resolve()
       .then(() => auth())
       // If the auth function fails, connect without credentials so the server rejects the handshake
       // and the app gets a normal connect_error, instead of hanging forever.
-      .then((payload) => cb(payload ?? {}), () => cb({}))
+      .then(
+        (payload) => cb(payload ?? {}),
+        () => cb({}),
+      )
   }
 }
 
@@ -121,19 +136,26 @@ export class ChatClient {
     this.socket.disconnect()
   }
 
-  private request<T>(
-    event: keyof ClientToServerEvents,
-    payload?: unknown,
-  ): Promise<T> {
+  private request<T>(event: keyof ClientToServerEvents, payload?: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
       const cb = (err: Error | null, res?: AckResponse<T>) => {
-        if (err) return reject(new Error(`Request "${String(event)}" timed out after ${this.requestTimeout}ms`))
+        if (err)
+          return reject(
+            new Error(`Request "${String(event)}" timed out after ${this.requestTimeout}ms`),
+          )
         reviveDates(res)
         if (res?.ok) resolve(res.data)
-        else reject(res?.error ? new Error(res.error.message) : new Error('Request failed'))
+        else
+          reject(
+            res?.error
+              ? new ChatRequestError(res.error.message, res.error.code)
+              : new Error('Request failed'),
+          )
       }
       // timeout() makes socket.io call the ack with an error first if the server doesn't answer in time.
-      const sender = (this.requestTimeout > 0 ? this.socket.timeout(this.requestTimeout) : null) as {
+      const sender = (
+        this.requestTimeout > 0 ? this.socket.timeout(this.requestTimeout) : null
+      ) as {
         emit(e: string, ...args: unknown[]): void
       } | null
       const ack = sender ? cb : (res: AckResponse<T>) => cb(null, res)
@@ -191,8 +213,13 @@ export class ChatClient {
     return this.request<void>('room:delete', { roomId })
   }
 
-  getRoomMembers(roomId: string): Promise<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]> {
-    return this.request<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>('room:members', { roomId })
+  getRoomMembers(
+    roomId: string,
+  ): Promise<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]> {
+    return this.request<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>(
+      'room:members',
+      { roomId },
+    )
   }
 
   listRooms(): Promise<Room[]> {
@@ -215,7 +242,13 @@ export class ChatClient {
   }
 
   onMessageEdited(
-    listener: (data: { messageId: string; roomId: string; content: string; editedAt: Date; editedBy: string }) => void,
+    listener: (data: {
+      messageId: string
+      roomId: string
+      content: string
+      editedAt: Date
+      editedBy: string
+    }) => void,
   ): () => void {
     this.socket.on('message:edited', listener)
     return () => this.socket.off('message:edited', listener)
@@ -229,7 +262,14 @@ export class ChatClient {
   }
 
   onReaction(
-    listener: (data: { messageId: string; roomId: string; userId: string; username: string; emoji: string; reactedAt: Date }) => void,
+    listener: (data: {
+      messageId: string
+      roomId: string
+      userId: string
+      username: string
+      emoji: string
+      reactedAt: Date
+    }) => void,
   ): () => void {
     this.socket.on('message:reaction', listener)
     return () => this.socket.off('message:reaction', listener)
@@ -256,9 +296,7 @@ export class ChatClient {
     return () => this.socket.off('typing:stop', listener)
   }
 
-  onUserOnline(
-    listener: (data: Pick<User, 'id' | 'username'>) => void,
-  ): () => void {
+  onUserOnline(listener: (data: Pick<User, 'id' | 'username'>) => void): () => void {
     this.socket.on('user:online', listener)
     return () => this.socket.off('user:online', listener)
   }
@@ -278,7 +316,10 @@ export class ChatClient {
   }
 
   onRoomUserJoined(
-    listener: (data: { roomId: string; user: Pick<User, 'id' | 'username' | 'displayName'> }) => void,
+    listener: (data: {
+      roomId: string
+      user: Pick<User, 'id' | 'username' | 'displayName'>
+    }) => void,
   ): () => void {
     this.socket.on('room:user_joined', listener)
     return () => this.socket.off('room:user_joined', listener)
@@ -307,28 +348,19 @@ export class ChatClient {
   }
 
   // Generic listener API (for any event)
-  on<K extends keyof ServerToClientEvents>(
-    event: K,
-    listener: ServerToClientEvents[K]
-  ): this {
+  on<K extends keyof ServerToClientEvents>(event: K, listener: ServerToClientEvents[K]): this {
     // Double cast needed: the socket's overloaded on() expects a specific union member,
     // but we have the correct type via the K constraint at call-site.
     ;(this.socket as { on(e: string, l: ServerToClientEvents[K]): void }).on(event, listener)
     return this
   }
 
-  off<K extends keyof ServerToClientEvents>(
-    event: K,
-    listener?: ServerToClientEvents[K]
-  ): this {
+  off<K extends keyof ServerToClientEvents>(event: K, listener?: ServerToClientEvents[K]): this {
     ;(this.socket as { off(e: string, l?: ServerToClientEvents[K]): void }).off(event, listener)
     return this
   }
 
-  once<K extends keyof ServerToClientEvents>(
-    event: K,
-    listener: ServerToClientEvents[K]
-  ): this {
+  once<K extends keyof ServerToClientEvents>(event: K, listener: ServerToClientEvents[K]): this {
     ;(this.socket as { once(e: string, l: ServerToClientEvents[K]): void }).once(event, listener)
     return this
   }

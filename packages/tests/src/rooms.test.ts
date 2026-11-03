@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
-import type { User, Room } from '@ravex/types'
+import type { User, ServerToClientEvents } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Rooms', () => {
   let server: TestServer
@@ -34,33 +35,41 @@ describe('Rooms', () => {
     expect(room.members).toContain(userA.id)
 
     const rooms = await clientA.listRooms()
-    expect(rooms.some(r => r.id === room.id)).toBe(true)
+    expect(rooms.some((r) => r.id === room.id)).toBe(true)
   })
 
   it('should notify others when joining a room', async () => {
     const room = await clientA.createRoom({ type: 'group', name: 'Shared Room' })
-    
-    const joinPromise = new Promise<any>((resolve) => {
-      clientA.onRoomUserJoined((data) => resolve(data))
-    })
+
+    const joinPromise = new Promise<Parameters<ServerToClientEvents['room:user_joined']>[0]>(
+      (resolve) => {
+        clientA.onRoomUserJoined((data) => resolve(data))
+      },
+    )
 
     await clientB.joinRoom(room.id)
-    
+
     const joinData = await joinPromise
     expect(joinData.roomId).toBe(room.id)
     expect(joinData.user.id).toBe(userB.id)
   })
 
   it('should notify others when leaving a room', async () => {
-    const room = await clientA.createRoom({ type: 'group', name: 'Shared Room', members: [userB.id] })
-    await clientB.joinRoom(room.id)
-    
-    const leavePromise = new Promise<any>((resolve) => {
-      clientA.onRoomUserLeft((data) => resolve(data))
+    const room = await clientA.createRoom({
+      type: 'group',
+      name: 'Shared Room',
+      members: [userB.id],
     })
+    await clientB.joinRoom(room.id)
+
+    const leavePromise = new Promise<Parameters<ServerToClientEvents['room:user_left']>[0]>(
+      (resolve) => {
+        clientA.onRoomUserLeft((data) => resolve(data))
+      },
+    )
 
     await clientB.leaveRoom(room.id)
-    
+
     const leaveData = await leavePromise
     expect(leaveData.roomId).toBe(room.id)
     expect(leaveData.user.id).toBe(userB.id)
@@ -69,21 +78,25 @@ describe('Rooms', () => {
   it('should isolate messages to room members only', async () => {
     const roomAB = await clientA.createRoom({ type: 'group', name: 'Room AB', members: [userB.id] })
     await clientB.joinRoom(roomAB.id)
-    
+
     let clientCReceivedMessage = false
     clientC.onMessage(() => {
       clientCReceivedMessage = true
     })
 
-    const messagePromise = new Promise<any>((resolve) => {
-      clientB.onMessage((msg) => resolve(msg))
-    })
+    const messagePromise = new Promise<Parameters<ServerToClientEvents['message:new']>[0]>(
+      (resolve) => {
+        clientB.onMessage((msg) => resolve(msg))
+      },
+    )
 
     await clientA.sendMessage({ roomId: roomAB.id, content: 'Secret message' })
     await messagePromise
 
     // Wait a short time to ensure C didn't get it
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50)
+    })
     expect(clientCReceivedMessage).toBe(false)
   })
 })

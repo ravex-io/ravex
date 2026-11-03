@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 import type { ChatClient } from '@ravex/client'
-import type { User } from '@ravex/types'
+import type { User, ServerToClientEvents } from '@ravex/types'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+
+import { createServer, createConnectedClient, type TestServer } from './helpers/setup.js'
 
 describe('Typing Indicators', () => {
   let server: TestServer
@@ -17,7 +18,11 @@ describe('Typing Indicators', () => {
     clientA = await createConnectedClient(server.port, userA)
     clientB = await createConnectedClient(server.port, userB)
 
-    const room = await clientA.createRoom({ type: 'group', name: 'Typing Room', members: [userB.id] })
+    const room = await clientA.createRoom({
+      type: 'group',
+      name: 'Typing Room',
+      members: [userB.id],
+    })
     roomId = room.id
     await clientB.joinRoom(roomId)
   })
@@ -29,21 +34,25 @@ describe('Typing Indicators', () => {
   })
 
   it('should notify others when user starts typing', async () => {
-    const typingPromise = new Promise<any>((resolve) => {
-      clientB.onTypingStart((data) => resolve(data))
-    })
+    const typingPromise = new Promise<Parameters<ServerToClientEvents['typing:start']>[0]>(
+      (resolve) => {
+        clientB.onTypingStart((data) => resolve(data))
+      },
+    )
 
     clientA.startTyping(roomId)
-    
+
     const typingData = await typingPromise
     expect(typingData.roomId).toBe(roomId)
     expect(typingData.userId).toBe(userA.id)
   })
 
   it('should notify others when user stops typing', async () => {
-    const typingPromise = new Promise<any>((resolve) => {
-      clientB.onTypingStop((data) => resolve(data))
-    })
+    const typingPromise = new Promise<Parameters<ServerToClientEvents['typing:stop']>[0]>(
+      (resolve) => {
+        clientB.onTypingStop((data) => resolve(data))
+      },
+    )
 
     // typing:stop is only broadcast for a user who is actually typing
     const started = new Promise<void>((resolve) => {

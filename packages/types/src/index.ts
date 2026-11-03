@@ -128,15 +128,36 @@ export type AckResponse<T> =
 
 export interface ServerToClientEvents {
   'message:new': (message: Message) => void
-  'message:edited': (data: { messageId: string; roomId: string; content: string; editedAt: Date; editedBy: string }) => void
+  'message:edited': (data: {
+    messageId: string
+    roomId: string
+    content: string
+    editedAt: Date
+    editedBy: string
+  }) => void
   'message:deleted': (data: { messageId: string; roomId: string; deletedBy: string }) => void
-  'message:read_receipt': (data: { messageId: string; roomId: string; readBy: string; readAt: Date }) => void
-  'message:reaction': (data: { messageId: string; roomId: string; userId: string; username: string; emoji: string; reactedAt: Date }) => void
+  'message:read_receipt': (data: {
+    messageId: string
+    roomId: string
+    readBy: string
+    readAt: Date
+  }) => void
+  'message:reaction': (data: {
+    messageId: string
+    roomId: string
+    userId: string
+    username: string
+    emoji: string
+    reactedAt: Date
+  }) => void
 
   'typing:start': (data: { userId: string; username: string; roomId: string }) => void
   'typing:stop': (data: { userId: string; username: string; roomId: string }) => void
 
-  'room:user_joined': (data: { roomId: string; user: Pick<User, 'id' | 'username' | 'displayName'> }) => void
+  'room:user_joined': (data: {
+    roomId: string
+    user: Pick<User, 'id' | 'username' | 'displayName'>
+  }) => void
   'room:user_left': (data: { roomId: string; user: Pick<User, 'id' | 'username'> }) => void
   'room:user_kicked': (data: { roomId: string; userId: string; reason: string }) => void
   'room:kicked': (data: { roomId: string; reason: string }) => void
@@ -157,7 +178,10 @@ export interface ClientToServerEvents {
   'message:delete': (payload: DeleteMessagePayload, ack: Ack<void>) => void
   'message:read': (payload: ReadPayload) => void
   'message:react': (payload: ReactPayload, ack: Ack<void>) => void
-  'message:history': (payload: { roomId: string; limit?: number; before?: string }, ack: Ack<Message[]>) => void
+  'message:history': (
+    payload: { roomId: string; limit?: number; before?: string },
+    ack: Ack<Message[]>,
+  ) => void
 
   'typing:start': (payload: TypingPayload) => void
   'typing:stop': (payload: TypingPayload) => void
@@ -166,7 +190,10 @@ export interface ClientToServerEvents {
   'room:leave': (payload: LeaveRoomPayload, ack: Ack<void>) => void
   'room:create': (payload: CreateRoomPayload, ack: Ack<Room>) => void
   'room:delete': (payload: { roomId: string }, ack: Ack<void>) => void
-  'room:members': (payload: { roomId: string }, ack: Ack<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>) => void
+  'room:members': (
+    payload: { roomId: string },
+    ack: Ack<Pick<User, 'id' | 'username' | 'displayName' | 'status'>[]>,
+  ) => void
   'room:list': (ack: Ack<Room[]>) => void
 
   'presence:ping': () => void

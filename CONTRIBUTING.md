@@ -66,9 +66,9 @@ This command uses `tsup` to compile ESM/CJS bundles and TypeScript declaration f
 4. **Write Tests**: Open `packages/tests/src/` and write integration tests for your new feature. Ensure the feature behaves correctly under real network conditions.
 5. **Verify**:
    ```bash
-   pnpm build
-   pnpm test
+   pnpm check
    ```
+   This builds the packages, typechecks all source and tests, rejects lint warnings, checks formatting, and runs the full integration suite.
 
 ---
 
@@ -86,7 +86,8 @@ pnpm format
 
 ### TypeScript Constraints
 - **No `any`**: The `tsconfig.json` files are incredibly strict. Do not use `any`. Use `unknown` if a type is truly dynamic, or properly genericize your functions.
-- **No Magic Numbers**: Constants must be extracted and named clearly.
+- **No Magic Numbers**: Production constants must be extracted and named clearly. Test fixtures may use literal inputs and expected values so each scenario is readable in place.
+- **Test lint rules**: Tests allow setup variables initialized by lifecycle hooks, function declarations, async adapter stubs, and long scenario callbacks. Type safety, unused-variable checks, and all other correctness rules still apply.
 
 ---
 

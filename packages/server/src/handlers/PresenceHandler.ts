@@ -1,4 +1,5 @@
 import type { UserStatus } from '@ravex/types'
+
 import type { TypedNamespace, TypedSocket } from '../ChatEngine.js'
 import type { UserManager } from '../core/UserManager.js'
 import { logger } from '../utils/logger.js'

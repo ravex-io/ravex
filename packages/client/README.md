@@ -80,6 +80,25 @@ All messaging actions return a Promise that resolves when the server acknowledge
 - **`getHistory(roomId: string, limit?: number, before?: string): Promise<Message[]>`**
   Fetches historical messages for a room (requires a persistence adapter on the server).
 
+When the server refuses a request, the Promise rejects with a `ChatRequestError`: an `Error` whose `code` is the server's error code (for example `ROOM_NOT_FOUND` or `RATE_LIMIT_EXCEEDED`). With [moderation](../server/README.md#moderation-jev) enabled on the server, `sendMessage` and `editMessage` can also reject with:
+
+- `MESSAGE_BLOCKED`: the text was flagged as abusive. Nothing was delivered; keep the draft so the user can rephrase it.
+- `MODERATION_UNAVAILABLE`: the text could not be checked. Nothing was delivered. Usually the moderation service is unavailable and the user can try again; if the message says to shorten or change it, the service refused this particular text, and sending it unchanged will fail again.
+
+```typescript
+import { ChatRequestError } from '@ravex/client'
+
+try {
+  await client.sendMessage({ roomId, content: draft })
+} catch (err) {
+  if (err instanceof ChatRequestError && err.code === 'MESSAGE_BLOCKED') {
+    showNotice('This message breaks the community guidelines and was not sent.')
+  } else {
+    throw err
+  }
+}
+```
+
 ### Rooms (Promise-based)
 
 - **`createRoom(payload: CreateRoomPayload): Promise<Room>`**
