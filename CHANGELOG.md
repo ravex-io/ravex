@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-04
+
 ### Added
 - `authenticate` option on `ChatEngine` to verify who is connecting (e.g. from a token or cookie in the handshake).
 - `insecureTrustClientUser` option to trust the client-provided `auth.user` during local development.
